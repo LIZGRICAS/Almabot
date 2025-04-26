@@ -116,6 +116,6 @@ Paso 4: Ejecutar el Bot
 
     -Ahora, para iniciar el bot, escribe este comando en la terminal:
 
-    python bot.py
+    python main.py
 
     ¡Listo! Si todo está bien, tu bot comenzará a funcionar y podrás hablar con él en Telegram.
