@@ -1,5 +1,3 @@
-
-
 Este ejemplo muestra como utilizar telegram para crear un bot, se utilizará para generar el entorno de pruebas en línea del agente virtual que se esta implementando para la aplicación ALmaBot.
 
 > **_LINKS IMPORTANTES:_**<br>
