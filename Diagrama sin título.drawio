@@ -33,7 +33,7 @@
         <mxCell id="kA3lS-xDFs2Ie9XyK34J-37" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="kA3lS-xDFs2Ie9XyK34J-7" target="kA3lS-xDFs2Ie9XyK34J-21">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="kA3lS-xDFs2Ie9XyK34J-7" value="Agente base de datos" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="kA3lS-xDFs2Ie9XyK34J-7" value="Agente base&amp;nbsp;&lt;div&gt;de datos&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="790" y="320" width="120" height="60" as="geometry" />
         </mxCell>
         <mxCell id="kA3lS-xDFs2Ie9XyK34J-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="kA3lS-xDFs2Ie9XyK34J-11" target="kA3lS-xDFs2Ie9XyK34J-16">
