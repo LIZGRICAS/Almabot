@@ -4,9 +4,20 @@ Almabot es una solución digital para luchar contra el bullying, que ofrece recu
 
 Este ejemplo muestra como utilizar telegram para crear un bot, se utilizará para generar el entorno de pruebas en línea del agente virtual que se esta implementando para la aplicación ALmaBot.
 
+<p>
+<img src="https://i.ibb.co/LXbyyxkD/Alma-Chat-Bot.png" alt="Alma-Chat-Bot" />
+</p>
+
 > **_LINKS IMPORTANTES:_**<br>
 >[Documentación de la API de Telegram Bot](https://core.telegram.org/bots)<br>
 >[Documentación telebot](https://github.com/eternnoir/pyTelegramBotAPI)
+>[Despliegue de app Almachatbot](https://almachatbot.vercel.app/)
+
+**_Diagrama UML app web:_**<br>
+
+<p>
+<img src="https://i.ibb.co/gbLx2n9p/Diagrama-sin-t-tulo-drawio2.png" alt="Diagrama UML Alma-Chat-Bot" />
+</p>
 
 ### Requisitos
 
