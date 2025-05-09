@@ -10,13 +10,13 @@ Este ejemplo muestra como utilizar telegram para crear un bot, se utilizará par
 
 > **_LINKS IMPORTANTES:_**<br>
 >[Documentación de la API de Telegram Bot](https://core.telegram.org/bots)<br>
->[Documentación telebot](https://github.com/eternnoir/pyTelegramBotAPI)
+>[Documentación telebot](https://github.com/eternnoir/pyTelegramBotAPI)<br>
 >[Despliegue de app Almachatbot](https://almachatbot.vercel.app/)
 
-**_Diagrama UML app web:_**<br>
+**_Diagrama UML App web:_**<br>
 
 <p>
-<img src="https://i.ibb.co/gbLx2n9p/Diagrama-sin-t-tulo-drawio2.png" alt="Diagrama UML Alma-Chat-Bot" />
+<img src="https://i.ibb.co/4n4RhsQ5/Diagrama-sin-t-tulo-drawio2-drawio.png" alt="Diagrama UML Alma-Chat-Bot" />
 </p>
 
 ### Requisitos
