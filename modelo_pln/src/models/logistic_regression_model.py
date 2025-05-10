@@ -57,7 +57,7 @@ class BullyingDetectionModel:
         y_pred = self.model.predict(X_vectors)
         return classification_report(y_test, y_pred)
     
-    def save_model(self, path='models/'):
+    def save_model(self, path='/app/data/models/'):
         """Guarda el modelo y el vectorizador"""
         try:
             # Asegurarse de que el directorio existe
@@ -92,7 +92,7 @@ class BullyingDetectionModel:
             print(f"Error al guardar el modelo: {e}")
             raise
 
-    def load_model(self, path='models/'):
+    def load_model(self, path='/app/data/models/'):
         """Carga el modelo y el vectorizador"""
         try:
             # Cargar el modelo

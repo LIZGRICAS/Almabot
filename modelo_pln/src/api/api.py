@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 from datetime import datetime
-from chatbot import Chatbot
+from bot.chatbot import Chatbot
 
 app = FastAPI(
     title="Chatbot Anti-Bullying API",

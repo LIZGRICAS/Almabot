@@ -30,12 +30,9 @@ def balance_dataset(X, y):
 def prepare_data():
     """Prepara los datos de entrenamiento"""
     try:
-        # Obtener el directorio actual
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        
-        # Construir rutas absolutas
-        phrases_path = os.path.join(current_dir, 'training_phrases.csv')
-        bullying_path = os.path.join(current_dir, 'Bullying_2018_copy_traducido_final.csv')
+        # Definir rutas absolutas en el directorio de datos
+        phrases_path = '/app/data/raw/training_phrases.csv'
+        bullying_path = '/app/data/raw/Bullying_2018_copy_traducido_final.csv'
         
         print(f"Intentando cargar archivos desde:")
         print(f"Phrases: {phrases_path}")
@@ -93,64 +90,58 @@ def prepare_data():
         raise
 
 def main():
+    """Función principal para entrenar el modelo"""
     try:
-        # Obtener el directorio actual
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        models_dir = os.path.join(current_dir, 'models')
+        print("\n=== Iniciando proceso de entrenamiento ===")
         
-        # Crear directorio para modelos si no existe
-        os.makedirs(models_dir, exist_ok=True)
+        # Crear/verificar directorio de modelos
+        models_dir = '/app/data/models'
         print(f"Directorio de modelos creado/verificado: {models_dir}")
         
         # Preparar datos
         X, y = prepare_data()
         
+        # Balancear dataset
+        X_balanced, y_balanced = balance_dataset(X, y)
+        print(f"\nTotal de ejemplos de entrenamiento después del balanceo: {len(X_balanced)}")
+        
         # Dividir datos
         X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
+            X_balanced, y_balanced, test_size=0.2, random_state=42
         )
-        
-        print(f"Conjunto de entrenamiento: {len(X_train)} ejemplos")
+        print(f"\nConjunto de entrenamiento: {len(X_train)} ejemplos")
         print(f"Conjunto de prueba: {len(X_test)} ejemplos")
         
         # Crear y entrenar modelo
         model = BullyingDetectionModel()
-        
-        # Vectorizar los datos de entrenamiento
-        X_train_vectors = model.vectorizer.fit_transform(X_train)
-        X_test_vectors = model.vectorizer.transform(X_test)
-        
-        # Entrenar el modelo
-        model.model.fit(X_train_vectors, y_train)
+        model.train(X_train, y_train)
         
         # Evaluar modelo
-        print("\nEvaluación del modelo:")
-        print(model.evaluate(X_test, y_test))
+        print("\n=== Evaluación del modelo ===")
+        report = model.evaluate(X_test, y_test)
+        print(report)
         
         # Validación cruzada
-        cv_scores = cross_val_score(model.model, X_train_vectors, y_train, cv=5)
-        print("\nResultados de validación cruzada:")
-        print(f"Precisión media: {cv_scores.mean():.3f} (+/- {cv_scores.std() * 2:.3f})")
+        print("\n=== Validación cruzada ===")
+        cv_scores = cross_val_score(
+            model.model, model.vectorizer.transform(X_balanced), y_balanced,
+            cv=5, scoring='accuracy'
+        )
+        print(f"Precisión media: {cv_scores.mean():.3f} (+/- {cv_scores.std():.3f})")
         
         # Guardar modelo
+        print("\n=== Guardando modelo ===")
         model.save_model(path=models_dir)
         
-        # Verificar que los archivos se guardaron correctamente
-        model_files = os.listdir(models_dir)
-        print("\nArchivos guardados:")
-        for file in model_files:
-            file_path = os.path.join(models_dir, file)
-            file_size = os.path.getsize(file_path)
-            print(f"- {file} ({file_size} bytes)")
-        
-        # Cargar el modelo
+        # Cargar y verificar modelo
+        print("\n=== Verificando modelo guardado ===")
         model.load_model()
+        print("Modelo cargado correctamente")
         
-        # Hacer predicciones para el conjunto de prueba
-        y_pred = model.model.predict(X_test_vectors)
-        y_prob = model.model.predict_proba(X_test_vectors)
-        
-        # Generar gráficos de métricas de evaluación
+        # Generar gráficos de métricas
+        print("\n=== Generando gráficos ===")
+        y_pred = model.model.predict(model.vectorizer.transform(X_test))
+        y_prob = model.model.predict_proba(model.vectorizer.transform(X_test))[:, 1]
         plot_metrics(y_test, y_pred, y_prob)
         
         # Prueba con un ejemplo individual
@@ -169,7 +160,7 @@ def plot_metrics(y_test, y_pred, y_prob):
     """Genera y guarda gráficos de métricas de evaluación"""
     try:
         # Crear directorio para gráficos si no existe
-        plots_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'plots')
+        plots_dir = '/app/data/plots'
         os.makedirs(plots_dir, exist_ok=True)
         
         # Matriz de confusión
@@ -184,10 +175,10 @@ def plot_metrics(y_test, y_pred, y_prob):
         plt.close()
         
         # Curva ROC
-        fpr, tpr, _ = roc_curve(y_test, y_prob[:, 1])
+        fpr, tpr, _ = roc_curve(y_test, y_prob)
         roc_auc = auc(fpr, tpr)
         plt.figure(figsize=(8, 6))
-        plt.plot(fpr, tpr, label=f'ROC (AUC = {roc_auc:.2f})')
+        plt.plot(fpr, tpr, label=f'ROC (AUC = {roc_auc:.2f}')
         plt.plot([0, 1], [0, 1], 'k--')
         plt.xlabel('Tasa de Falsos Positivos')
         plt.ylabel('Tasa de Verdaderos Positivos')

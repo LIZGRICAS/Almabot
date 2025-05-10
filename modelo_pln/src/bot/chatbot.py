@@ -1,5 +1,5 @@
-from nlp_processor import NLPProcessor
-from logistic_regression_model import BullyingDetectionModel
+from nlp.nlp_processor import NLPProcessor
+from models.logistic_regression_model import BullyingDetectionModel
 import json
 import os
 from datetime import datetime

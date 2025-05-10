@@ -17,10 +17,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); nltk.download('wordnet'); nltk.download('punkt_tab')"
 
 # Copy project files
-COPY . .
+COPY src/ src/
+COPY data/ data/
 
 # Set environment variables
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app:/app/src
 
 # Command to run the Telegram bot
-CMD ["python", "telegram_bot.py"]
+CMD ["python", "src/bot/telegram_bot.py"]

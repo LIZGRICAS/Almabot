@@ -4,10 +4,10 @@ from datetime import datetime
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from dotenv import load_dotenv
-from logistic_regression_model import BullyingDetectionModel
-from nlp_processor import NLPProcessor
+from models.logistic_regression_model import BullyingDetectionModel
+from nlp.nlp_processor import NLPProcessor
 import random
-from classes import UsuarioAnonimo, Mensaje, SesionTerapia
+from models.classes import UsuarioAnonimo, Mensaje, SesionTerapia
 
 # Cargar variables de entorno
 load_dotenv()

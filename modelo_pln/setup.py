@@ -1,0 +1,41 @@
+from setuptools import setup, find_packages
+
+setup(
+    name="almabot",
+    version="1.0.0",
+    description="AlmaBot - Asistente Virtual Anti-Bullying",
+    author="Luis Manuel Hernandez Jimenez, Lizbeth Grisales Castro, Santiago Perez Cifuentes, Valery Meléndez Gallego, Paola Andrea Martínez Díaz",
+    author_email="",
+    packages=find_packages('src'),
+    package_dir={'': 'src'},
+    install_requires=[
+        'fastapi>=0.68.0',
+        'uvicorn>=0.15.0',
+        'pydantic>=1.8.0',
+        'python-dotenv>=1.0.0',
+        'scikit-learn>=0.24.2',
+        'numpy>=1.21.0',
+        'pandas>=1.3.0',
+        'joblib>=1.0.1',
+        'mysql-connector-python>=8.0.0',
+        'python-jose>=3.3.0',
+        'passlib>=1.7.4',
+        'python-multipart>=0.0.5',
+        'nltk>=3.8.1',
+        'matplotlib>=3.4.0',
+        'seaborn>=0.11.2',
+        'python-telegram-bot>=20.0'
+    ],
+    package_data={
+        '': ['*.sql', '*.csv', '*.joblib'],
+    },
+    include_package_data=True,
+    classifiers=[
+        'Development Status :: 3 - Alpha',
+        'Intended Audience :: Education',
+        'License :: OSI Approved :: MIT License',
+        'Programming Language :: Python :: 3.9',
+        'Topic :: Education',
+        'Topic :: Scientific/Engineering :: Artificial Intelligence'
+    ],
+)

@@ -13,7 +13,7 @@ import pandas as pd
 import csv
 import json
 from datetime import datetime
-from logistic_regression_model import BullyingDetectionModel
+from models.logistic_regression_model import BullyingDetectionModel
 
 class NLPProcessor:
     def __init__(self):

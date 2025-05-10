@@ -2,22 +2,30 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Instalar dependencias del sistema
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar archivos de requisitos
+# Create necessary directories
+RUN mkdir -p /app/data/models
+RUN mkdir -p /app/data/plots
+
+# Copy requirements
 COPY requirements.txt .
 
-# Instalar dependencias de Python
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Descargar recursos NLTK
+# Download NLTK resources
 RUN python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); nltk.download('wordnet')"
 
-# Copiar archivos del proyecto
-COPY . .
+# Copy project files
+COPY src/ src/
+COPY data/ data/
 
-# Comando para entrenar el modelo
-CMD ["python", "train_model.py"] 
+# Set environment variables
+ENV PYTHONPATH=/app
+
+# Command to train the model
+CMD ["python", "src/models/train_model.py"]
