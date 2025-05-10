@@ -2,25 +2,25 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Instalar dependencias del sistema
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar archivos de requisitos
+# Copy requirements
 COPY requirements.txt .
 
-# Instalar dependencias de Python
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Descargar recursos NLTK
+# Download NLTK resources
 RUN python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); nltk.download('wordnet'); nltk.download('punkt_tab')"
 
-# Copiar archivos del proyecto
+# Copy project files
 COPY . .
 
-# Exponer puerto
-EXPOSE 8000
+# Set environment variables
+ENV PYTHONPATH=/app
 
-# Comando para ejecutar la API
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"] 
+# Command to run the Telegram bot
+CMD ["python", "telegram_bot.py"]

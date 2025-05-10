@@ -10,7 +10,7 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD}
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     ports:
       - "3306:3306"
 
@@ -25,6 +25,35 @@ services:
       - DB_NAME=almabot
     ports:
       - "8000:8000"
+    depends_on:
+      - db
+
+  telegram_bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.telegram
+    environment:
+      - DB_HOST=db
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=almabot
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+    depends_on:
+      - db
+
+  training:
+    build:
+      context: .
+      dockerfile: Dockerfile.train
+    environment:
+      - DB_HOST=db
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=almabot
+    volumes:
+      - ./models:/app/models
+      - ./training_phrases.csv:/app/training_phrases.csv
+      - ./Bullying_2018_copy_traducido_final.csv:/app/Bullying_2018_copy_traducido_final.csv
     depends_on:
       - db
 
