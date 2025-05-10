@@ -1,141 +1,133 @@
 from nlp_processor import NLPProcessor
-import random
+from logistic_regression_model import BullyingDetectionModel
+import json
+import os
 from datetime import datetime
 
-class ChatbotTerapia:
+class Chatbot:
     def __init__(self):
         self.nlp = NLPProcessor()
-        self.conversation_history = []
-        self.user_context = {
-            'name': None,
-            'age': None,
-            'school': None,
-            'neighborhood': None,
-            'emotional_state': None,
-            'bullying_type': None
-        }
+        self.bullying_model = BullyingDetectionModel()
+        try:
+            self.bullying_model.load_model()
+        except Exception as e:
+            print(f"Error al cargar el modelo: {e}")
         
-        # Respuestas empáticas
-        self.empathic_responses = {
-            'positive': [
-                "Me alegra que estés teniendo una experiencia positiva. ¿Te gustaría compartir más sobre eso?",
-                "Es bueno escuchar que las cosas van bien. ¿Hay algo específico que quieras discutir?",
-                "Me alegra que estés en un buen momento. ¿Cómo puedo ayudarte a mantener esta positividad?"
-            ],
-            'negative': [
-                "Lamento mucho que estés pasando por esto. ¿Te gustaría contarme más sobre lo que te está afectando?",
-                "Entiendo que esto debe ser difícil para ti. ¿Qué es lo que más te preocupa en este momento?",
-                "Es normal sentirse así. ¿Quieres que exploremos juntos qué está causando estos sentimientos?",
-                "Me duele escuchar que estás pasando por un momento difícil. ¿Hay algo específico que te gustaría compartir?",
-                "Estoy aquí para escucharte. ¿Qué te ha llevado a sentirte así?"
-            ],
-            'neutral': [
-                "Entiendo. ¿Podrías contarme más sobre lo que te preocupa?",
-                "Gracias por compartir esto conmigo. ¿Qué te gustaría hacer al respecto?",
-                "Estoy aquí para escucharte. ¿Qué sientes que necesitas en este momento?",
-                "¿Te gustaría que exploremos juntos algunas opciones para manejar esta situación?",
-                "¿Qué te gustaría que hiciéramos para ayudarte a sentirte mejor?"
-            ]
-        }
-        
-        # Consejos específicos basados en patrones
-        self.advice_patterns = {
-            'loneliness': [
-                "Según nuestros datos, tener 3 o más amigos cercanos puede ayudar a prevenir el bullying.",
-                "Es importante mantener conexiones sociales. ¿Te gustaría hablar sobre cómo hacer más amigos?",
-                "No estás solo/a. Muchos estudiantes han pasado por situaciones similares."
-            ],
-            'physical': [
-                "Si has sido atacado físicamente, es importante reportarlo inmediatamente a las autoridades escolares.",
-                "La violencia física nunca es aceptable. ¿Has hablado con alguien sobre esto?",
-                "Recuerda que tienes derecho a estar seguro/a en la escuela."
-            ],
-            'cyberbullying': [
-                "El cyberbullying es tan serio como el bullying presencial. ¿Has guardado evidencia de los mensajes?",
-                "Es importante no responder a los agresores en línea. ¿Has bloqueado a las personas que te acosan?",
-                "¿Has hablado con tus padres o profesores sobre el cyberbullying que estás experimentando?"
-            ],
-            'school_absence': [
-                "Faltar a la escuela no es la solución. ¿Has hablado con un consejero escolar sobre esto?",
-                "Es importante mantener tu educación. ¿Te gustaría explorar opciones para sentirte más seguro/a en la escuela?",
-                "¿Has considerado cambiar de escuela si la situación es muy grave?"
-            ]
-        }
+        self.log_file = 'chat_logs.jsonl'
+        self.logs = []
+        self._load_logs()
     
-    def process_message(self, message):
-        """Procesa el mensaje del usuario y genera una respuesta apropiada"""
-        # Analizar sentimiento
-        sentiment = self.nlp.analyze_sentiment(message)
-        
-        # Extraer palabras clave
-        keywords = self.nlp.extract_keywords(message)
-        
-        # Actualizar contexto del usuario
-        self._update_user_context(keywords)
-        
-        # Generar respuesta
-        response = self._generate_response(sentiment, keywords)
-        
-        # Guardar en historial
-        self._save_to_history(message, response)
-        
-        return response
+    def _load_logs(self):
+        try:
+            if os.path.exists(self.log_file):
+                with open(self.log_file, 'r', encoding='utf-8') as f:
+                    self.logs = [json.loads(line) for line in f if line.strip()]
+            else:
+                self.logs = []
+        except Exception as e:
+            print(f"Error al cargar logs: {e}")
+            self.logs = []
     
-    def _update_user_context(self, keywords):
-        """Actualiza el contexto del usuario basado en las palabras clave"""
-        categories = keywords['categories']
-        
-        # Actualizar tipo de bullying
-        if categories:
-            self.user_context['bullying_type'] = max(categories.items(), key=lambda x: x[1])[0]
-        
-        # Actualizar estado emocional basado en palabras clave
-        emotional_keywords = {
-            'triste': 'negative',
-            'feliz': 'positive',
-            'preocupado': 'negative',
-            'ansioso': 'negative',
-            'contento': 'positive'
-        }
-        
-        for keyword in keywords['keywords']:
-            if keyword in emotional_keywords:
-                self.user_context['emotional_state'] = emotional_keywords[keyword]
+    def _save_log(self, user_id, message, response, analysis):
+        try:
+            log_entry = {
+                'timestamp': datetime.now().isoformat(),
+                'user_id': user_id,
+                'message': message,
+                'response': response,
+                'analysis': analysis
+            }
+            
+            with open(self.log_file, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
+            
+            self.logs.append(log_entry)
+        except Exception as e:
+            print(f"Error al guardar log: {e}")
     
-    def _generate_response(self, sentiment, keywords):
-        """Genera una respuesta basada en el análisis del mensaje"""
-        # Determinar el estado emocional predominante
-        if sentiment['score'] > 0.1:
-            emotional_state = 'positive'
-        elif sentiment['score'] < -0.1:
-            emotional_state = 'negative'
+    def process_message(self, user_id, message):
+        try:
+            prediction, probability = self.bullying_model.predict(message)
+            confidence = max(probability)
+            keywords = self.nlp.extract_keywords(message)
+            
+            # Mejorar la detección de bullying físico
+            bullying_type = "ninguno"
+            if prediction == 1 or any(word in message.lower() for word in ["empujar", "empujan", "golpear", "golpean", "pegar", "pegan"]):
+                if any(word in message.lower() for word in ["empujar", "empujan", "golpear", "golpean", "pegar", "pegan"]):
+                    bullying_type = "físico"
+                    prediction = 1  # Forzar la detección de bullying
+                elif "verbal" in message.lower() or "insultar" in message.lower():
+                    bullying_type = "verbal"
+                elif "social" in message.lower() or "excluir" in message.lower():
+                    bullying_type = "social"
+                elif "cibernético" in message.lower() or "internet" in message.lower():
+                    bullying_type = "cibernético"
+            
+            response = self._generate_response(prediction, confidence, bullying_type)
+            
+            analysis = {
+                'is_bullying': bool(prediction),
+                'confidence': float(confidence),
+                'bullying_type': bullying_type,
+                'keywords': keywords
+            }
+            self._save_log(user_id, message, response, analysis)
+            
+            return response
+            
+        except Exception as e:
+            print(f"Error al procesar el mensaje: {e}")
+            return "Lo siento, ha ocurrido un error al procesar tu mensaje. Por favor, intenta de nuevo."
+    
+    def _generate_response(self, prediction, confidence, bullying_type):
+        if prediction == 1:
+            base_response = (
+                "Entiendo que estás pasando por una situación difícil. "
+                "Es importante que sepas que no estás solo y que hay personas que pueden ayudarte. "
+                "¿Te gustaría hablar más sobre esto?"
+            ) if confidence > 0.8 else (
+                "Parece que estás pasando por una situación complicada. "
+                "¿Te gustaría contarme más sobre lo que está sucediendo?"
+            )
+            
+            recommendations = {
+                "físico": "\n\nRecomendaciones:\n- Busca ayuda inmediatamente de un adulto de confianza\n- Documenta cualquier lesión o incidente\n- No te enfrentes solo a la situación",
+                "verbal": "\n\nRecomendaciones:\n- No respondas a los insultos\n- Guarda evidencia de los mensajes o comentarios\n- Habla con un consejero escolar",
+                "social": "\n\nRecomendaciones:\n- Busca apoyo en otros grupos o actividades\n- Habla con tus padres o profesores\n- Recuerda que tienes derecho a ser respetado",
+                "cibernético": "\n\nRecomendaciones:\n- Guarda capturas de pantalla de los mensajes\n- Bloquea a las personas que te acosan\n- Reporta el acoso a la plataforma"
+            }
+            
+            response = base_response + recommendations.get(bullying_type, "")
+            response += "\n\nRecursos de emergencia:\n- Línea de ayuda contra el bullying: 123-456-789\n- Psicólogo escolar disponible en horario de clases\n- Centro de apoyo estudiantil"
         else:
-            emotional_state = 'neutral'
-        
-        # Obtener respuesta empática
-        response = random.choice(self.empathic_responses[emotional_state])
-        
-        # Agregar consejos específicos si se detectan patrones
-        if keywords['categories']:
-            for category in keywords['categories']:
-                if category in self.advice_patterns:
-                    response += "\n\n" + random.choice(self.advice_patterns[category])
+            response = (
+                "Me alegro de que me cuentes cómo te sientes. "
+                "¿Hay algo más en lo que pueda ayudarte?"
+            )
         
         return response
     
-    def _save_to_history(self, message, response):
-        """Guarda la interacción en el historial de conversación"""
-        self.conversation_history.append({
-            'timestamp': datetime.now(),
-            'message': message,
-            'response': response,
-            'context': self.user_context.copy()
-        })
+    def get_user_history(self, user_id):
+        try:
+            return [log for log in self.logs if log.get('user_id') == user_id]
+        except Exception as e:
+            print(f"Error al obtener historial: {e}")
+            return []
+
+def main():
+    chatbot = Chatbot()
+    user_id = "user123"
+    test_messages = [
+        "Me empujan constantemente en el pasillo",
+        "Me siento bien en la escuela",
+        "Me envían mensajes amenazantes por WhatsApp"
+    ]
     
-    def get_conversation_history(self):
-        """Retorna el historial de conversación"""
-        return self.conversation_history
-    
-    def get_user_context(self):
-        """Retorna el contexto actual del usuario"""
-        return self.user_context 
+    for message in test_messages:
+        print(f"\nUsuario: {message}")
+        response = chatbot.process_message(user_id, message)
+        print(f"Chatbot: {response}")
+
+if __name__ == "__main__":
+    main() 
