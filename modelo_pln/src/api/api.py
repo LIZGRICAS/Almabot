@@ -49,6 +49,7 @@ async def process_message(request: MessageRequest):
     Process a chat message and return a response
     """
     try:
+        print("Processing message...")
         logger.info(f"Processing message from user: {request.user_id}")
         logger.debug(f"Message content: {request.message}")
         
