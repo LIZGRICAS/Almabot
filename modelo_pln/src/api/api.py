@@ -27,6 +27,11 @@ chatbot = Chatbot()
 logger.info("API initialized")
 logger.info(f"Database connection: {DB_HOST}/{DB_NAME}")
 
+class UserRequest(BaseModel):
+    age: Optional[int] = None
+    neighborhood: Optional[str] = None
+    school: Optional[str] = None
+
 class MessageRequest(BaseModel):
     user_id: str
     message: str
@@ -42,11 +47,6 @@ class MessageResponse(BaseModel):
 class UserHistoryResponse(BaseModel):
     history: List[Dict]
     user_id: str
-
-class UserRequest(BaseModel):
-    age: Optional[int] = None
-    neighborhood: Optional[str] = None
-    school: Optional[str] = None
 
 class ConversationRequest(BaseModel):
     user_id: str
@@ -207,4 +207,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001) 
+    uvicorn.run(app, host="0.0.0.0", port=8000) 
