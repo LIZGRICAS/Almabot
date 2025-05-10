@@ -43,6 +43,63 @@ class UserHistoryResponse(BaseModel):
     history: List[Dict]
     user_id: str
 
+class UserRequest(BaseModel):
+    age: Optional[int] = None
+    neighborhood: Optional[str] = None
+    school: Optional[str] = None
+
+class ConversationRequest(BaseModel):
+    user_id: str
+    metadata: Optional[Dict] = None
+
+@app.post("/user", response_model=Dict)
+async def create_user(request: UserRequest):
+    """
+    Create a new anonymous user and return the user_id
+    """
+    try:
+        logger.info("Creating new anonymous user")
+        
+        # Connect to database
+        if not db.connect():
+            logger.error("Database connection failed")
+            raise HTTPException(status_code=500, detail="Database connection failed")
+        
+        # Create user
+        user_id = db.create_anonymous_user(
+            age=request.age,
+            neighborhood=request.neighborhood,
+            school=request.school
+        )
+        logger.info(f"User created with ID: {user_id}")
+        
+        return {"user_id": user_id}
+    except Exception as e:
+        logger.error(f"Error creating user: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/conversation", response_model=Dict)
+async def create_conversation(request: ConversationRequest):
+    """
+    Create a new conversation and return the conversation_id
+    """
+    try:
+        logger.info(f"Creating conversation for user: {request.user_id}")
+        
+        # Connect to database
+        if not db.connect():
+            logger.error("Database connection failed")
+            raise HTTPException(status_code=500, detail="Database connection failed")
+        
+        # Create conversation
+        conversation_id = db.create_conversation(request.user_id, request.metadata or {})
+        logger.info(f"Conversation created with ID: {conversation_id}")
+        
+        return {"conversation_id": conversation_id}
+    except Exception as e:
+        logger.error(f"Error creating conversation: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/chat", response_model=MessageResponse)
 async def process_message(request: MessageRequest):
     """

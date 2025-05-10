@@ -81,6 +81,26 @@ class Database:
             print(f"Error creating emotional state: {e}")
             raise
 
+    def create_anonymous_user(self, age: Optional[int] = None, neighborhood: Optional[str] = None, school: Optional[str] = None) -> str:
+        try:
+            if not self.connection:
+                self.connect()
+            
+            cursor = self.connection.cursor()
+            user_id = str(uuid.uuid4())
+            session_id = str(uuid.uuid4())
+            
+            sql = """
+                INSERT INTO anonymous_users (id, session_id, age, neighborhood, school)
+                VALUES (%s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql, (user_id, session_id, age, neighborhood, school))
+            self.connection.commit()
+            return user_id
+        except Error as e:
+            print(f"Error creating anonymous user: {e}")
+            raise
+
     def create_risk_assessment(self, message_id: str, risk_level: str, risk_type: str):
         try:
             if not self.connection:
