@@ -40,6 +40,11 @@ services:
       - "8000:8000"
     depends_on:
       - db_init
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   telegram_bot:
     build:
