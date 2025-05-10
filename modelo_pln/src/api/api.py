@@ -31,11 +31,13 @@ class UserRequest(BaseModel):
     age: Optional[int] = None
     neighborhood: Optional[str] = None
     school: Optional[str] = None
+    created_by: Optional[str] = None
 
 class MessageRequest(BaseModel):
     user_id: str
     message: str
     metadata: Optional[Dict] = None
+    created_by: Optional[str] = None
 
 class MessageResponse(BaseModel):
     response: str
@@ -51,6 +53,7 @@ class UserHistoryResponse(BaseModel):
 class ConversationRequest(BaseModel):
     user_id: str
     metadata: Optional[Dict] = None
+    created_by: Optional[str] = None
 
 @app.post("/user", response_model=Dict)
 async def create_user(request: UserRequest):
@@ -69,7 +72,8 @@ async def create_user(request: UserRequest):
         user_id = db.create_anonymous_user(
             age=request.age,
             neighborhood=request.neighborhood,
-            school=request.school
+            school=request.school,
+            created_by=request.created_by
         )
         logger.info(f"User created with ID: {user_id}")
         
@@ -92,7 +96,11 @@ async def create_conversation(request: ConversationRequest):
             raise HTTPException(status_code=500, detail="Database connection failed")
         
         # Create conversation
-        conversation_id = db.create_conversation(request.user_id, request.metadata or {})
+        conversation_id = db.create_conversation(
+            request.user_id,
+            request.metadata or {},
+            created_by=request.created_by
+        )
         logger.info(f"Conversation created with ID: {conversation_id}")
         
         return {"conversation_id": conversation_id}
@@ -118,7 +126,11 @@ async def process_message(request: MessageRequest):
             logger.info("Database connection successful")
             
             # Create conversation if it doesn't exist
-            conversation_id = db.create_conversation(request.user_id, request.metadata or {})
+            conversation_id = db.create_conversation(
+                request.user_id,
+                request.metadata or {},
+                created_by=request.created_by
+            )
             logger.info(f"Conversation created with ID: {conversation_id}")
             
             # Process the message with the chatbot
@@ -131,7 +143,8 @@ async def process_message(request: MessageRequest):
                 conversation_id=conversation_id,
                 sender='user',
                 content=request.message,
-                sentiment_score=analysis.get('sentiment_score', 0.0)
+                sentiment_score=analysis.get('sentiment_score', 0.0),
+                created_by=request.created_by
             )
             logger.info(f"Message record created with ID: {message_id}")
             
@@ -140,7 +153,8 @@ async def process_message(request: MessageRequest):
                 db.create_emotional_state(
                     message_id=message_id,
                     emotion_type=analysis['emotion']['type'],
-                    intensity=analysis['emotion']['intensity']
+                    intensity=analysis['emotion']['intensity'],
+                    created_by=request.created_by
                 )
                 logger.info(f"Emotional state created: {analysis['emotion']['type']}")
             
@@ -149,7 +163,8 @@ async def process_message(request: MessageRequest):
                 db.create_risk_assessment(
                     message_id=message_id,
                     risk_level=analysis['risk']['level'],
-                    risk_type=analysis['risk']['type']
+                    risk_type=analysis['risk']['type'],
+                    created_by=request.created_by
                 )
                 logger.warning(f"Risk assessment created: {analysis['risk']['level']} - {analysis['risk']['type']}")
         except Exception as e:

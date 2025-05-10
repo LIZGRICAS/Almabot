@@ -31,7 +31,7 @@
     },
     
     transition_to_bullying_flow: {
-      message: (params) => ¡Perfecto, ${params.userInput}! Ya somos amig@s de cora 🫶🤍 por siempre 💫. ¿List@ para una aventura emocional juntos?,
+      message: (params) => ¡Perfecto, ${params.userInput}! Ya somos amig@s de cora 🫶🤍 por siempre 💫. ¿List@ para una aventura emocional juntos? ,
       path: "ask_bullying_experience",
     }
   }

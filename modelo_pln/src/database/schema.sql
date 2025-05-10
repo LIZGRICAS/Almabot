@@ -2,13 +2,30 @@
 CREATE DATABASE IF NOT EXISTS almabot;
 USE almabot;
 
+-- Audit log table
+CREATE TABLE IF NOT EXISTS audit_log (
+    id VARCHAR(36) PRIMARY KEY,
+    table_name VARCHAR(50) NOT NULL,
+    record_id VARCHAR(36) NOT NULL,
+    action ENUM('INSERT', 'UPDATE', 'DELETE') NOT NULL,
+    old_data JSON,
+    new_data JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(36)
+);
+
 -- Users table (for admin purposes)
 CREATE TABLE IF NOT EXISTS users (
     id VARCHAR(36) PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     role ENUM('admin', 'moderator') NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(36),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by VARCHAR(36),
+    deleted_at TIMESTAMP NULL,
+    deleted_by VARCHAR(36)
 );
 
 -- Anonymous users table
@@ -19,7 +36,11 @@ CREATE TABLE IF NOT EXISTS anonymous_users (
     neighborhood VARCHAR(100),
     school VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_interaction TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_by VARCHAR(36),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by VARCHAR(36),
+    deleted_at TIMESTAMP NULL,
+    deleted_by VARCHAR(36),
     is_active BOOLEAN DEFAULT TRUE
 );
 
@@ -31,6 +52,12 @@ CREATE TABLE IF NOT EXISTS conversations (
     end_time TIMESTAMP NULL,
     is_active BOOLEAN DEFAULT TRUE,
     metadata JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(36),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by VARCHAR(36),
+    deleted_at TIMESTAMP NULL,
+    deleted_by VARCHAR(36),
     FOREIGN KEY (user_id) REFERENCES anonymous_users(id)
 );
 
@@ -42,6 +69,11 @@ CREATE TABLE IF NOT EXISTS messages (
     content TEXT NOT NULL,
     sentiment_score FLOAT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(36),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by VARCHAR(36),
+    deleted_at TIMESTAMP NULL,
+    deleted_by VARCHAR(36),
     FOREIGN KEY (conversation_id) REFERENCES conversations(id)
 );
 
