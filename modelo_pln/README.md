@@ -86,3 +86,22 @@ El proyecto incluye los siguientes servicios Docker:
 ## Licencia
 
 Este proyecto está bajo la licencia MIT.
+
+## Base de Datos
+
+La base de datos se encuentra en el archivo `src/database/schema.sql`.
+
+Para acceder a la base de datos:
+
+```bash
+sudo docker exec -it modelo_pln-db-1 mysql -ualmabot -palmabot123 almabot
+```
+
+Algunas consultas útiles:
+
+```sql
+SHOW TABLES;
+DESCRIBE anonymous_users;
+DESCRIBE therapy_sessions;
+DESCRIBE messages;
+```

@@ -1,32 +1,33 @@
-import sqlite3
-from datetime import datetime
+import mysql.connector
+from mysql.connector import Error
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class Database:
-    def __init__(self, db_name="almabot.db"):
-        self.conn = sqlite3.connect(db_name)
-        self.crear_tablas()
-        
+    def __init__(self):
+        try:
+            self.conn = mysql.connector.connect(
+                host=os.getenv('DB_HOST', 'db'),
+                user=os.getenv('DB_USER', 'root'),
+                password=os.getenv('DB_PASSWORD', 'password'),
+                database=os.getenv('DB_NAME', 'almabot')
+            )
+            self.crear_tablas()
+        except Error as e:
+            print(f"Error connecting to MySQL: {e}")
+            raise
+    
     def crear_tablas(self):
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS sesiones (
-                id INTEGER PRIMARY KEY,
-                user_id TEXT,
-                fecha_inicio TIMESTAMP,
-                fecha_fin TIMESTAMP
-            )
-        ''')
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS mensajes (
-                id INTEGER PRIMARY KEY,
-                sesion_id INTEGER,
-                contenido TEXT,
-                emisor TEXT,
-                timestamp TIMESTAMP,
-                bullying_detectado BOOLEAN,
-                emocion TEXT,
-                FOREIGN KEY (sesion_id) REFERENCES sesiones (id)
-            )
-        ''')
-        self.conn.commit() 
+        try:
+            with open('src/database/schema.sql', 'r') as f:
+                schema = f.read()
+            cursor = self.conn.cursor()
+            for statement in schema.split(';'):
+                if statement.strip():
+                    cursor.execute(statement)
+            self.conn.commit()
+        except Error as e:
+            print(f"Error creating tables: {e}")
+            raise 
