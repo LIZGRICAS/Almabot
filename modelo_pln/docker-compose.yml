@@ -65,6 +65,7 @@ services:
           memory: 512M
 
 
+  # Training service - runs once to train and save the model
   training:
     build:
       context: .
@@ -79,22 +80,32 @@ services:
     volumes:
       - ./data/models:/app/data/models
       - ./data/raw:/app/data/raw
+      - ./src:/app/src
     depends_on:
       db:
         condition: service_healthy
     deploy:
       resources:
         limits:
-          cpus: '1'
+          cpus: '2'
+          memory: 4G
+        reservations:
           memory: 2G
-    restart: on-failure
-    security_opt:
-      - no-new-privileges:true
+    restart: 'no'  # No restart after completion
+    command: >
+      bash -c "python -c 'from models.train_model import main; main()' && 
+               echo 'Training completed successfully. The model has been saved.' && 
+               exit 0"
+    profiles:
+      - train
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
+    tmpfs:
+      - /tmp
+      - /var/tmp
 
 volumes:
   mysql_data:
