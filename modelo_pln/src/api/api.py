@@ -4,7 +4,6 @@ from typing import Optional, List, Dict
 from datetime import datetime
 from bot.chatbot import Chatbot
 from database.db_utils import Database
-from .logging_config import logger
 import os
 
 # Initialize database connection
@@ -24,8 +23,8 @@ app = FastAPI(
 # Inicializar el chatbot
 chatbot = Chatbot()
 
-logger.info("API initialized")
-logger.info(f"Database connection: {DB_HOST}/{DB_NAME}")
+print("API initialized")
+print(f"Database connection: {DB_HOST}/{DB_NAME}")
 
 class UserRequest(BaseModel):
     age: Optional[int] = None
@@ -61,11 +60,11 @@ async def create_user(request: UserRequest):
     Create a new anonymous user and return the user_id
     """
     try:
-        logger.info("Creating new anonymous user")
+        print("Creating new anonymous user")
         
         # Connect to database
         if not db.connect():
-            logger.error("Database connection failed")
+            print("Database connection failed")
             raise HTTPException(status_code=500, detail="Database connection failed")
         
         # Create user
@@ -75,11 +74,11 @@ async def create_user(request: UserRequest):
             school=request.school,
             created_by=request.created_by
         )
-        logger.info(f"User created with ID: {user_id}")
+        print(f"User created with ID: {user_id}")
         
         return {"user_id": user_id}
     except Exception as e:
-        logger.error(f"Error creating user: {str(e)}", exc_info=True)
+        print(f"Error creating user: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/conversation", response_model=Dict)
@@ -88,11 +87,11 @@ async def create_conversation(request: ConversationRequest):
     Create a new conversation and return the conversation_id
     """
     try:
-        logger.info(f"Creating conversation for user: {request.user_id}")
+        print(f"Creating conversation for user: {request.user_id}")
         
         # Connect to database
         if not db.connect():
-            logger.error("Database connection failed")
+            print("Database connection failed")
             raise HTTPException(status_code=500, detail="Database connection failed")
         
         # Create conversation
@@ -101,11 +100,11 @@ async def create_conversation(request: ConversationRequest):
             request.metadata or {},
             created_by=request.created_by
         )
-        logger.info(f"Conversation created with ID: {conversation_id}")
+        print(f"Conversation created with ID: {conversation_id}")
         
         return {"conversation_id": conversation_id}
     except Exception as e:
-        logger.error(f"Error creating conversation: {str(e)}", exc_info=True)
+        print(f"Error creating conversation: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/chat", response_model=MessageResponse)
@@ -115,15 +114,15 @@ async def process_message(request: MessageRequest):
     """
     try:
         print("Processing message...")
-        logger.info(f"Processing message from user: {request.user_id}")
+        print(f"Processing message from user: {request.user_id}")
         logger.debug(f"Message content: {request.message}")
         
         # Connect to database
         try:
             if not db.connect():
-                logger.error("Database connection failed")
+                print("Database connection failed")
                 raise HTTPException(status_code=500, detail="Database connection failed")
-            logger.info("Database connection successful")
+            print("Database connection successful")
             
             # Create conversation if it doesn't exist
             conversation_id = db.create_conversation(
@@ -131,11 +130,11 @@ async def process_message(request: MessageRequest):
                 request.metadata or {},
                 created_by=request.created_by
             )
-            logger.info(f"Conversation created with ID: {conversation_id}")
+            print(f"Conversation created with ID: {conversation_id}")
             
             # Process the message with the chatbot
             response, analysis = chatbot.process_message(request.message)
-            logger.info("Message processed successfully")
+            print("Message processed successfully")
             logger.debug(f"Analysis result: {analysis}")
             
             # Create message record
@@ -146,7 +145,7 @@ async def process_message(request: MessageRequest):
                 sentiment_score=analysis.get('sentiment_score', 0.0),
                 created_by=request.created_by
             )
-            logger.info(f"Message record created with ID: {message_id}")
+            print(f"Message record created with ID: {message_id}")
             
             # Create emotional state if available
             if 'emotion' in analysis:
@@ -156,7 +155,7 @@ async def process_message(request: MessageRequest):
                     intensity=analysis['emotion']['intensity'],
                     created_by=request.created_by
                 )
-                logger.info(f"Emotional state created: {analysis['emotion']['type']}")
+                print(f"Emotional state created: {analysis['emotion']['type']}")
             
             # Create risk assessment if available
             if 'risk' in analysis:
@@ -168,7 +167,7 @@ async def process_message(request: MessageRequest):
                 )
                 logger.warning(f"Risk assessment created: {analysis['risk']['level']} - {analysis['risk']['type']}")
         except Exception as e:
-            logger.error(f"Error during database operations: {str(e)}", exc_info=True)
+            print(f"Error during database operations: {str(e)}", exc_info=True)
             raise
 
         return MessageResponse(
@@ -179,11 +178,11 @@ async def process_message(request: MessageRequest):
             message_id=message_id
         )
     except Exception as e:
-        logger.error(f"Error processing message: {str(e)}", exc_info=True)
+        print(f"Error processing message: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
-        logger.info("Database connection closed")
+        print("Database connection closed")
 
 @app.get("/history/{user_id}", response_model=UserHistoryResponse)
 async def get_user_history(user_id: str):
@@ -191,27 +190,27 @@ async def get_user_history(user_id: str):
     Get user's chat history
     """
     try:
-        logger.info(f"Getting history for user: {user_id}")
+        print(f"Getting history for user: {user_id}")
         
         # Connect to database
         if not db.connect():
-            logger.error("Database connection failed")
+            print("Database connection failed")
             raise HTTPException(status_code=500, detail="Database connection failed")
 
         # Get history from database
         history = db.get_user_history(user_id)
-        logger.info(f"Retrieved {len(history)} records for user {user_id}")
+        print(f"Retrieved {len(history)} records for user {user_id}")
         
         return UserHistoryResponse(
             history=history,
             user_id=user_id
         )
     except Exception as e:
-        logger.error(f"Error getting user history: {str(e)}", exc_info=True)
+        print(f"Error getting user history: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
-        logger.info("Database connection closed")
+        print("Database connection closed")
 
 @app.get("/health")
 async def health_check():
