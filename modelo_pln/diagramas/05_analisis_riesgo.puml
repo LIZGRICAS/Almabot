@@ -1,0 +1,31 @@
+@startuml
+title Flujo de Análisis de Riesgo
+
+actor Usuario
+participant API
+participant "Procesador NLP" as NLP
+participant "Base de Datos" as DB
+
+Usuario -> API: Envía mensaje
+activate API
+
+API -> NLP: Analizar texto
+activate NLP
+NLP -> NLP: Evaluar riesgo
+NLP -> NLP: Analizar sentimiento
+
+alt Riesgo Alto
+    NLP -> DB: Crear alerta
+    activate DB
+    DB --> NLP: Confirmación
+    deactivate DB
+    NLP --> API: Respuesta con alerta
+    API -> Usuario: Respuesta con recursos de ayuda
+else Riesgo Normal
+    NLP --> API: Respuesta estándar
+    API -> Usuario: Respuesta normal
+end
+deactivate NLP
+deactivate API
+
+@enduml

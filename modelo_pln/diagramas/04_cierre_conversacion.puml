@@ -1,0 +1,26 @@
+@startuml
+title Flujo de Cierre de Conversación
+
+actor Usuario
+participant API
+participant "Base de Datos" as DB
+
+Usuario -> API: POST /api/conversation/end\n{ "conversation_id": "conv_456" }
+activate API
+
+API -> DB: Marcar conversación como finalizada
+activate DB
+DB --> API: Confirmación
+deactivate DB
+
+API -> API: Generar resumen de la conversación
+
+API -> DB: Guardar análisis final
+activate DB
+DB --> API: Confirmación
+deactivate DB
+
+API --> Usuario: 200 OK\n{\n  "status": "conversation_ended",\n  "summary": {\n    "duration_minutes": 15,\n    "message_count": 10,\n    "risk_assessment": "low"\n  }\n}
+deactivate API
+
+@enduml
