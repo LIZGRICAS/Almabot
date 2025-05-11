@@ -51,18 +51,22 @@ class Chatbot:
             confidence = max(probability)
             keywords = self.nlp.extract_keywords(message)
             
-            # Mejorar la detección de bullying físico
-            bullying_type = "ninguno"
+            # Mejorar la detección de bullying
+            bullying_type = "other"  # Default to 'other' which is a valid ENUM value
             if prediction == 1 or any(word in message.lower() for word in ["empujar", "empujan", "golpear", "golpean", "pegar", "pegan"]):
                 if any(word in message.lower() for word in ["empujar", "empujan", "golpear", "golpean", "pegar", "pegan"]):
-                    bullying_type = "físico"
+                    bullying_type = "bullying"  # Map to valid ENUM value
                     prediction = 1  # Forzar la detección de bullying
+                elif "suicid" in message.lower() or "matar" in message.lower() or "morir" in message.lower():
+                    bullying_type = "suicide"  # Map to valid ENUM value
+                elif "abuso" in message.lower() or "abusar" in message.lower() or "acoso" in message.lower():
+                    bullying_type = "abuse"  # Map to valid ENUM value
                 elif "verbal" in message.lower() or "insultar" in message.lower():
-                    bullying_type = "verbal"
+                    bullying_type = "bullying"  # Map to valid ENUM value
                 elif "social" in message.lower() or "excluir" in message.lower():
-                    bullying_type = "social"
-                elif "cibernético" in message.lower() or "internet" in message.lower():
-                    bullying_type = "cibernético"
+                    bullying_type = "bullying"  # Map to valid ENUM value
+                elif "ciber" in message.lower() or "internet" in message.lower():
+                    bullying_type = "bullying"  # Map to valid ENUM value
             
             response = self._generate_response(prediction, confidence, bullying_type)
             

@@ -140,27 +140,47 @@ class Database:
             cursor = self.connection.cursor()
             state_id = str(uuid.uuid4())
             
-            # Insert emotional state
-            sql = """
-                INSERT INTO emotional_states (id, message_id, emotion_type, intensity, created_by)
-                VALUES (%s, %s, %s, %s, %s)
-            """
-            cursor.execute(sql, (
-                state_id,
-                message_id,
-                emotion_type,
-                intensity,
-                created_by or self.system_user_id
-            ))
+            try:
+                # Try with created_by first
+                sql = """
+                    INSERT INTO emotional_states (id, message_id, emotion_type, intensity, created_by)
+                    VALUES (%s, %s, %s, %s, %s)
+                """
+                cursor.execute(sql, (
+                    state_id,
+                    message_id,
+                    emotion_type,
+                    intensity,
+                    created_by or self.system_user_id
+                ))
+            except Error as e:
+                if "Unknown column 'created_by'" in str(e):
+                    # Fallback to schema without created_by
+                    sql = """
+                        INSERT INTO emotional_states (id, message_id, emotion_type, intensity)
+                        VALUES (%s, %s, %s, %s)
+                    """
+                    cursor.execute(sql, (
+                        state_id,
+                        message_id,
+                        emotion_type,
+                        intensity
+                    ))
+                else:
+                    raise
             
             # Log audit
-            self.log_audit(
-                table_name='emotional_states',
-                record_id=state_id,
-                action='INSERT',
-                new_data={'message_id': message_id, 'emotion_type': emotion_type, 'intensity': intensity},
-                user_id=created_by
-            )
+            try:
+                self.log_audit(
+                    table_name='emotional_states',
+                    record_id=state_id,
+                    action='INSERT',
+                    new_data={'message_id': message_id, 'emotion_type': emotion_type, 'intensity': intensity},
+                    user_id=created_by
+                )
+            except Exception as audit_error:
+                print(f"Warning: Failed to create audit log: {audit_error}")
+                # Continue even if audit log fails
             
             self.connection.commit()
         except Error as e:
@@ -247,11 +267,60 @@ class Database:
             cursor = self.connection.cursor()
             assessment_id = str(uuid.uuid4())
             
-            sql = """
-                INSERT INTO risk_assessment (id, message_id, risk_level, risk_type)
-                VALUES (%s, %s, %s, %s)
-            """
-            cursor.execute(sql, (assessment_id, message_id, risk_level, risk_type))
+            # First, check if the created_by column exists
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM information_schema.COLUMNS 
+                WHERE TABLE_SCHEMA = %s 
+                AND TABLE_NAME = 'risk_assessment' 
+                AND COLUMN_NAME = 'created_by'
+            """, (self.database,))
+            
+            has_created_by = cursor.fetchone()[0] > 0
+            
+            if has_created_by:
+                sql = """
+                    INSERT INTO risk_assessment (id, message_id, risk_level, risk_type, created_by)
+                    VALUES (%s, %s, %s, %s, %s)
+                """
+                params = (
+                    assessment_id, 
+                    message_id, 
+                    risk_level, 
+                    risk_type,
+                    created_by or self.system_user_id
+                )
+            else:
+                sql = """
+                    INSERT INTO risk_assessment (id, message_id, risk_level, risk_type)
+                    VALUES (%s, %s, %s, %s)
+                """
+                params = (
+                    assessment_id, 
+                    message_id, 
+                    risk_level, 
+                    risk_type
+                )
+            
+            cursor.execute(sql, params)
+            
+            # Log audit
+            try:
+                self.log_audit(
+                    table_name='risk_assessment',
+                    record_id=assessment_id,
+                    action='INSERT',
+                    new_data={
+                        'message_id': message_id, 
+                        'risk_level': risk_level, 
+                        'risk_type': risk_type
+                    },
+                    user_id=created_by
+                )
+            except Exception as audit_error:
+                print(f"Warning: Failed to create audit log for risk assessment: {audit_error}")
+                # Continue even if audit log fails
+            
             self.connection.commit()
         except Error as e:
             print(f"Error creating risk assessment: {e}")

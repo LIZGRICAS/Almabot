@@ -246,13 +246,23 @@ async def process_message(request: MessageRequest):
             
             # Create risk assessment if available
             if 'risk' in analysis:
+                # Ensure risk_type is one of the allowed values: 'bullying', 'suicide', 'abuse', 'other'
+                risk_type = analysis['risk']['type'].lower()
+                if risk_type not in ['bullying', 'suicide', 'abuse', 'other']:
+                    risk_type = 'other'  # Default to 'other' if not a valid type
+                
+                # Ensure risk_level is one of the allowed values: 'low', 'medium', 'high'
+                risk_level = analysis['risk']['level'].lower()
+                if risk_level not in ['low', 'medium', 'high']:
+                    risk_level = 'low'  # Default to 'low' if not a valid level
+                
                 db.create_risk_assessment(
                     message_id=message_id,
-                    risk_level=analysis['risk']['level'],
-                    risk_type=analysis['risk']['type'],
+                    risk_level=risk_level,
+                    risk_type=risk_type,
                     created_by=request.created_by
                 )
-                logger.warning(f"Risk assessment created: {analysis['risk']['level']} - {analysis['risk']['type']}")
+                logger.warning(f"Risk assessment created: {risk_level} - {risk_type}")
         except Exception as e:
             print(f"Error during database operations: {str(e)}")
             import traceback
