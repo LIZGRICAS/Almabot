@@ -1,0 +1,37 @@
+{
+    start: {
+      message: "¡Hola hola! Soy AlmaBot y estoy muy feliz de conocerte 🧠🌈. ¿Cómo te gustaría que te llame? (Tu nombre o un apodo divertido)",
+      path: "ask_age",
+    },
+    ask_age: {
+      message: (params) => ¡Genial, ${params.userInput}! 😊 ¿Cuántos años tienes? (Escribe solo el número, porfa),
+      function: (params) => setName(params.userInput),
+      // chatDisabled: true, // ❌ ¡Esto bloquea la escritura! Elimínalo
+      path: async (params) => {
+        const age = parseInt(params.userInput);
+        if (isNaN(age) || age < 5 || age > 18) {
+          await params.injectMessage("Ups... eso no parece una edad válida. Intenta con un número entre 6 y 14 🙈");
+          return "ask_age";
+        }
+        params.setAge?.(age); // opcional si tienes esta función
+        return "ask_city";
+      },
+    },    
+    ask_city: {
+      message: (params) => ¡Gracias! ¿En qué ciudad o barrio vives tú? 🌍,
+      path: "ask_grade",
+    },
+    ask_grade: {
+      message: "¿Y en qué grado estás en el cole? 🎒📚",
+      path: "ask_nickname",
+    },
+    ask_nickname: {
+      message: "Si tuvieras un súper apodo secreto... ¿cómo te gustaría que te diga? 🦸‍♀️✨",
+      path: "transition_to_bullying_flow",
+    },
+    
+    transition_to_bullying_flow: {
+      message: (params) => ¡Perfecto, ${params.userInput}! Ya somos amig@s de cora 🫶🤍 por siempre 💫. ¿List@ para una aventura emocional juntos? ,
+      path: "ask_bullying_experience",
+    }
+  }

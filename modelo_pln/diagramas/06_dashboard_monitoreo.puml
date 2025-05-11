@@ -1,0 +1,50 @@
+@startuml
+title Flujo del Dashboard de Monitoreo
+
+actor "Administrador" as Admin
+participant "Dashboard" as D
+participant API
+participant "Base de Datos" as DB
+
+== Inicialización ==
+Admin -> D: Abre el dashboard
+activate D
+D -> API: GET /api/metricas
+activate API
+API -> DB: Consultar métricas
+activate DB
+DB --> API: Datos de métricas
+deactivate DB
+API --> D: Métricas formateadas
+deactivate API
+D --> Admin: Muestra dashboard
+
+== Filtrado por fecha ==
+Admin -> D: Aplica filtros de fecha
+alt Rango de fechas
+    D -> API: GET /api/metricas?start=...&end=...
+    activate API
+    API -> DB: Consulta con filtros
+    activate DB
+    DB --> API: Datos filtrados
+    deactivate DB
+    API --> D: Datos actualizados
+    deactivate API
+    D --> Admin: Actualiza dashboard
+end
+
+== Detalle de alertas ==
+Admin -> D: Selecciona alerta
+D -> API: GET /api/alertas/{id}
+activate API
+API -> DB: Consultar alerta
+activate DB
+DB --> API: Datos de la alerta
+deactivate DB
+API --> D: Detalles de la alerta
+deactivate API
+D --> Admin: Muestra detalles
+
+deactivate D
+
+@enduml

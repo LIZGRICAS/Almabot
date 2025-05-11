@@ -1,0 +1,39 @@
+@startuml
+title Flujo de Envío de Mensaje
+
+actor Usuario
+participant API
+participant "Base de Datos" as DB
+participant "Procesador NLP" as NLP
+
+Usuario -> API: POST /api/message\n{\n  "user_id": "user_123",\n  "conversation_id": "conv_456",\n  "content": "Hola"\n}
+activate API
+
+API -> DB: Guardar mensaje del usuario
+activate DB
+DB --> API: Confirmación
+deactivate DB
+
+API -> NLP: Analizar mensaje
+activate NLP
+NLP -> NLP: Detectar riesgo
+NLP -> NLP: Analizar sentimiento
+NLP --> API: Análisis completado
+deactivate NLP
+
+API -> DB: Guardar análisis de riesgo
+activate DB
+DB --> API: Confirmación
+deactivate DB
+
+API -> API: Generar respuesta
+
+API -> DB: Guardar respuesta del bot
+activate DB
+DB --> API: Confirmación
+deactivate DB
+
+API --> Usuario: 200 OK\n{\n  "response": "¡Hola! ¿En qué puedo ayudarte hoy?",\n  "analysis": {\n    "risk_level": "low",\n    "emotion": "neutral"\n  }\n}
+deactivate API
+
+@enduml

@@ -1,0 +1,19 @@
+@startuml
+title Flujo de Registro de Usuario Anónimo
+
+actor Usuario
+participant API
+participant "Base de Datos" as DB
+
+Usuario -> API: POST /api/register\n{ "session_id": "abc123" }
+activate API
+
+API -> DB: Crear usuario anónimo
+activate DB
+DB --> API: ID de usuario
+deactivate DB
+
+API --> Usuario: 200 OK\n{ "user_id": "user_123", "status": "success" }
+deactivate API
+
+@enduml

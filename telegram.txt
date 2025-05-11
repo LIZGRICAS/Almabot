@@ -1,0 +1,33 @@
+
+  telegram_bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.telegram
+    container_name: almabot-telegram
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      - API_URL=http://api:8000
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN:-your_telegram_bot_token_here}
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          memory: 256M
+    stop_signal: SIGTERM
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

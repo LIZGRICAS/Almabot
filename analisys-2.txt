@@ -1,0 +1,5 @@
+"tipo_bullying": "¿Qué es lo que más te molesta últimamente? (puedes escoger más de una): [Me dicen cosas feas, Me ignoran, Me empujan o pegan, Me acosan en redes, Otra cosa]",
+  "frecuencia": "¿Esto pasa muchas veces o fue solo una vez?",
+  "persona_confianza": "¿Hay algún adulto o amigo en quien confíes para contarle lo que está pasando?",
+  "emociones": "¿Cómo te has sentido con todo esto? [triste, con rabia, con miedo, confundido/a, solo/a, no sé]",
+  "te_gustaria_ayuda": "¿Te gustaría que te dé ideas para sentirte mejor?"

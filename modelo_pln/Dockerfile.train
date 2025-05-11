@@ -1,0 +1,67 @@
+# Etapa de construcción
+FROM python:3.9-slim as builder
+
+WORKDIR /app
+
+# Instalar dependencias del sistema necesarias para compilación
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Instalar dependencias
+COPY requirements.txt .
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Descargar recursos de NLTK
+RUN python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); nltk.download('wordnet')"
+
+# Etapa de producción
+FROM python:3.9-slim
+
+# Crear usuario no root
+RUN groupadd -r appuser -g 1000 && \
+    useradd -u 1000 -r -g appuser -d /app -s /sbin/nologin -c "Docker image user" appuser && \
+    mkdir -p /app/data/{models,plots,raw} /home/appuser/nltk_data && \
+    chown -R appuser:appuser /app /home/appuser && \
+    chmod -R 755 /app /home/appuser
+
+# Configurar entorno
+WORKDIR /app
+ENV PYTHONPATH=/app:/app/src \
+    PYTHONUNBUFFERED=1 \
+    PYTHONHASHSEED=42 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=100 \
+    NLTK_DATA=/home/appuser/nltk_data \
+    MPLCONFIGDIR=/tmp/matplotlib \
+    HOME=/home/appuser
+
+# Instalar dependencias del sistema necesarias en tiempo de ejecución
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Instalar dependencias del builder
+COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copiar código fuente
+COPY --chown=appuser:appuser src/ src/
+
+# Copiar recursos de NLTK del builder
+COPY --from=builder --chown=appuser:appuser /root/nltk_data /home/appuser/nltk_data
+
+# Cambiar a usuario no root
+USER appuser
+
+# Verificar que se pueden importar los módulos principales
+RUN python -c "import nltk; from models.train_model import main; print('Training module loaded successfully')"
+
+# Health check
+HEALTHCHECK --interval=5m --timeout=10s --start-period=30s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)" || exit 1
+
+# Comando por defecto
+CMD ["python", "src/models/train_model.py"]

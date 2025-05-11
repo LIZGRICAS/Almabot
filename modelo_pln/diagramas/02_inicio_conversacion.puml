@@ -1,0 +1,19 @@
+@startuml
+title Flujo de Inicio de Conversación
+
+actor Usuario
+participant API
+participant "Base de Datos" as DB
+
+Usuario -> API: POST /api/conversation/start\n{ "user_id": "user_123" }
+activate API
+
+API -> DB: Crear nueva conversación
+activate DB
+DB --> API: ID de conversación
+deactivate DB
+
+API --> Usuario: 200 OK\n{ "conversation_id": "conv_456", "status": "started" }
+deactivate API
+
+@enduml

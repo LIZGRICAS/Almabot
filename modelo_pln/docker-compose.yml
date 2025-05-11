@@ -1,0 +1,117 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: almabot-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-almabot_root}
+      MYSQL_DATABASE: ${DB_NAME:-almabot}
+      MYSQL_USER: ${DB_USER:-almabot}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-almabot123}
+      MYSQL_ROOT_HOST: '%'
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./src/database/schema.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${DB_USER:-almabot}", "-p${DB_PASSWORD:-almabot123}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: almabot-api
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      - DB_HOST=db
+      - DB_USER=${DB_USER:-almabot}
+      - DB_PASSWORD=${DB_PASSWORD:-almabot123}
+      - DB_NAME=${DB_NAME:-almabot}
+      - DB_PORT=3306
+      - PYTHONUNBUFFERED=1
+      - PYTHONHASHSEED=42
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          memory: 512M
+
+
+  # Training service - runs once to train and save the model
+  training:
+    build:
+      context: .
+      dockerfile: Dockerfile.train
+    container_name: almabot-training
+    environment:
+      - DB_HOST=db
+      - DB_USER=${DB_USER:-almabot}
+      - DB_PASSWORD=${DB_PASSWORD:-almabot123}
+      - DB_NAME=${DB_NAME:-almabot}
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data/models:/app/data/models
+      - ./data/raw:/app/data/raw
+      - ./src:/app/src
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          memory: 2G
+    restart: 'no'  # No restart after completion
+    command: >
+      bash -c "python -c 'from models.train_model import main; main()' && 
+               echo 'Training completed successfully. The model has been saved.' && 
+               exit 0"
+    profiles:
+      - train
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    tmpfs:
+      - /tmp
+      - /var/tmp
+
+volumes:
+  mysql_data:
+    name: almabot_mysql_data
+    driver: local
+
+networks:
+  default:
+    driver: bridge
