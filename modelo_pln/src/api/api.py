@@ -126,35 +126,35 @@ async def create_user(request: UserRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to create user: {str(e)}")
 
-@api_router.post("/conversation", response_model=Dict, tags=["conversations"])
-async def create_conversation(request: ConversationRequest):
-    """
-    Create a new conversation and return the conversation_id
-    """
-    try:
-        print(f"Creating conversation for user: {request.user_id}")
+# @api_router.post("/conversation", response_model=Dict, tags=["conversations"])
+# async def create_conversation(request: ConversationRequest):
+#     """
+#     Create a new conversation and return the conversation_id
+#     """
+#     try:
+#         print(f"Creating conversation for user: {request.user_id}")
         
-        # Connect to database
-        if not db.connect():
-            print("Database connection failed")
-            raise HTTPException(status_code=500, detail="Database connection failed")
+#         # Connect to database
+#         if not db.connect():
+#             print("Database connection failed")
+#             raise HTTPException(status_code=500, detail="Database connection failed")
         
-        # Create conversation
-        conversation_id = db.create_conversation(
-            request.user_id,
-            request.metadata or {},
-            created_by=request.created_by
-        )
-        print(f"Conversation created with ID: {conversation_id}")
+#         # Create conversation
+#         conversation_id = db.create_conversation(
+#             request.user_id,
+#             request.metadata or {},
+#             created_by=request.created_by
+#         )
+#         print(f"Conversation created with ID: {conversation_id}")
         
-        return {"conversation_id": conversation_id}
-    except Exception as e:
-        print(f"Error creating conversation: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+#         return {"conversation_id": conversation_id}
+#     except Exception as e:
+#         print(f"Error creating conversation: {str(e)}")
+#         import traceback
+#         traceback.print_exc()
+#         raise HTTPException(status_code=500, detail=str(e))
 
-@api_router.post("/chat", response_model=MessageResponse, tags=["chat"])
+@api_router.post("/chat-message", response_model=MessageResponse, tags=["chat"])
 async def process_message(request: MessageRequest):
     """
     Process a chat message and return a response
