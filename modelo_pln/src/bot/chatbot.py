@@ -52,21 +52,34 @@ class Chatbot:
             keywords = self.nlp.extract_keywords(message)
             
             # Mejorar la detección de bullying
+            message_lower = message.lower()
             bullying_type = "other"  # Default to 'other' which is a valid ENUM value
-            if prediction == 1 or any(word in message.lower() for word in ["empujar", "empujan", "golpear", "golpean", "pegar", "pegan"]):
-                if any(word in message.lower() for word in ["empujar", "empujan", "golpear", "golpean", "pegar", "pegan"]):
-                    bullying_type = "bullying"  # Map to valid ENUM value
-                    prediction = 1  # Forzar la detección de bullying
-                elif "suicid" in message.lower() or "matar" in message.lower() or "morir" in message.lower():
-                    bullying_type = "suicide"  # Map to valid ENUM value
-                elif "abuso" in message.lower() or "abusar" in message.lower() or "acoso" in message.lower():
-                    bullying_type = "abuse"  # Map to valid ENUM value
-                elif "verbal" in message.lower() or "insultar" in message.lower():
-                    bullying_type = "bullying"  # Map to valid ENUM value
-                elif "social" in message.lower() or "excluir" in message.lower():
-                    bullying_type = "bullying"  # Map to valid ENUM value
-                elif "ciber" in message.lower() or "internet" in message.lower():
-                    bullying_type = "bullying"  # Map to valid ENUM value
+            
+            # Check for cyberbullying first
+            cyberbullying_indicators = ["ciber", "internet", "whatsapp", "redes", "red social", "mensaje", "amenaza", "amenazas", "online", "internet"]
+            if any(indicator in message_lower for indicator in cyberbullying_indicators):
+                bullying_type = "cibernético"  # Use the correct type from training data
+                prediction = 1  # Force bullying detection
+            # Check for physical bullying
+            elif any(word in message_lower for word in ["empujar", "empujan", "golpear", "golpean", "pegar", "pegan"]):
+                bullying_type = "bullying"
+                prediction = 1
+            # Check for suicide risk
+            elif any(term in message_lower for term in ["suicid", "matar", "morir", "acabar con todo"]):
+                bullying_type = "suicide"
+                prediction = 1
+            # Check for abuse
+            elif any(term in message_lower for term in ["abuso", "abusar", "acoso", "acosar"]):
+                bullying_type = "abuse"
+                prediction = 1
+            # Check for verbal bullying
+            elif any(term in message_lower for term in ["insultar", "insulto", "burlar", "burlan", "ofender"]):
+                bullying_type = "bullying"
+                prediction = 1
+            # Check for social bullying
+            elif any(term in message_lower for term in ["excluir", "excluyen", "ignorar", "ignoran", "hablan mal"]):
+                bullying_type = "bullying"
+                prediction = 1
             
             response = self._generate_response(prediction, confidence, bullying_type)
             
@@ -86,20 +99,62 @@ class Chatbot:
     
     def _generate_response(self, prediction, confidence, bullying_type):
         if prediction == 1:
+            # Base response for all bullying types
             base_response = (
-                "Entiendo que estás pasando por una situación difícil. "
-                "Es importante que sepas que no estás solo y que hay personas que pueden ayudarte. "
-                "¿Te gustaría hablar más sobre esto?"
+                "Entiendo que estás pasando por una situación muy difícil. "
+                "Es importante que sepas que no estás solo/a y que hay personas que pueden ayudarte. "
+                "¿Te gustaría hablar más sobre lo que está pasando?"
             ) if confidence > 0.8 else (
                 "Parece que estás pasando por una situación complicada. "
                 "¿Te gustaría contarme más sobre lo que está sucediendo?"
             )
             
+            # Emergency resources
+            emergency_resources = (
+                "\n\nRecursos de emergencia:"
+                "\n- Línea de ayuda contra el bullying: 123-456-789"
+                "\n- Línea de emergencia: 911"
+                "\n- Centro de apoyo estudiantil"
+            )
+            
+            # Specific recommendations by bullying type
             recommendations = {
-                "físico": "\n\nRecomendaciones:\n- Busca ayuda inmediatamente de un adulto de confianza\n- Documenta cualquier lesión o incidente\n- No te enfrentes solo a la situación",
-                "verbal": "\n\nRecomendaciones:\n- No respondas a los insultos\n- Guarda evidencia de los mensajes o comentarios\n- Habla con un consejero escolar",
-                "social": "\n\nRecomendaciones:\n- Busca apoyo en otros grupos o actividades\n- Habla con tus padres o profesores\n- Recuerda que tienes derecho a ser respetado",
-                "cibernético": "\n\nRecomendaciones:\n- Guarda capturas de pantalla de los mensajes\n- Bloquea a las personas que te acosan\n- Reporta el acoso a la plataforma"
+                "físico": (
+                    "\n\nRecomendaciones específicas para acoso físico:"
+                    "\n- Busca ayuda inmediatamente de un adulto de confianza"
+                    "\n- Documenta cualquier lesión o incidente con fechas y detalles"
+                    "\n- No te enfrentes solo/a a la situación"
+                    f"{emergency_resources}"
+                ),
+                "verbal": (
+                    "\n\nRecomendaciones específicas para acoso verbal:"
+                    "\n- No respondas a los insultos o provocaciones"
+                    "\n- Guarda evidencia de los mensajes o comentarios"
+                    "\n- Habla con un consejero escolar o profesor de confianza"
+                    f"{emergency_resources}"
+                ),
+                "cibernético": (
+                    "\n\nRecomendaciones específicas para ciberacoso:"
+                    "\n- No respondas a los mensajes de acoso"
+                    "\n- Guarda capturas de pantalla como evidencia"
+                    "\n- Reporta el perfil o contenido en la plataforma"
+                    "\n- Habla con un adulto de confianza sobre la situación"
+                    f"{emergency_resources}"
+                ),
+                "social": (
+                    "\n\nRecomendaciones específicas para acoso social:"
+                    "\n- Busca apoyo en otros grupos o actividades"
+                    "\n- Habla con tus padres o profesores"
+                    "\n- Recuerda que tienes derecho a ser respetado/a"
+                    f"{emergency_resources}"
+                ),
+                "other": (
+                    "\n\nRecomendaciones generales:"
+                    "\n- No estás solo/a en esto"
+                    "\n- Habla con un adulto de confianza"
+                    "\n- Recuerda que mereces respeto y apoyo"
+                    f"{emergency_resources}"
+                )
             }
             
             response = base_response + recommendations.get(bullying_type, "")
