@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS anonymous_users (
     updated_by VARCHAR(36),
     deleted_at TIMESTAMP NULL,
     deleted_by VARCHAR(36),
-    is_active BOOLEAN DEFAULT TRUE
+    is_active BOOLEAN DEFAULT TRUE,
+    last_interaction TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- Conversations table

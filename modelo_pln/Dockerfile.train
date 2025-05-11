@@ -1,31 +1,55 @@
+# Usar una imagen base con las herramientas necesarias
 FROM python:3.9-slim
 
-WORKDIR /app
+# Crear usuario no root
+RUN groupadd -r appuser && useradd -r -g appuser appuser \
+    && mkdir -p /app /app/logs /app/data/{models,plots,raw} \
+    && chown -R appuser:appuser /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Instalar dependencias del sistema
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Create necessary directories
-RUN mkdir -p /app/data/models
-RUN mkdir -p /app/data/plots
+# Configurar el directorio de trabajo
+WORKDIR /app
 
-# Copy requirements
+# Copiar requirements e instalar dependencias
 COPY requirements.txt .
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Download NLTK resources
+# Descargar recursos de NLTK
 RUN python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); nltk.download('wordnet')"
 
-# Copy project files
+# Crear directorios necesarios
+RUN mkdir -p /app/data/{models,plots,raw} \
+    && mkdir -p /home/appuser/nltk_data \
+    && chmod -R 755 /app/data \
+    && chown -R appuser:appuser /app/data \
+    && chown -R appuser:appuser /home/appuser
+
+# Copiar código fuente
 COPY src/ src/
-COPY data/ data/
 
-# Set environment variables
-ENV PYTHONPATH=/app
+# Asegurar permisos
+RUN chmod -R 755 /app \
+    && chown -R appuser:appuser /app
 
-# Command to train the model
+# Cambiar a usuario no root
+USER appuser
+
+# Establecer variables de entorno para NLTK y Matplotlib
+ENV PYTHONPATH=/app/src:$PYTHONPATH \
+    NLTK_DATA=/home/appuser/nltk_data \
+    MPLCONFIGDIR=/tmp/matplotlib
+
+# Verificar que se pueden importar los módulos principales
+RUN python -c "from models.train_model import main; print('Training module loaded successfully')"
+
+# Health check (simple check that Python works)
+HEALTHCHECK --interval=5m --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)" || exit 1
+
+# Comando por defecto
 CMD ["python", "src/models/train_model.py"]

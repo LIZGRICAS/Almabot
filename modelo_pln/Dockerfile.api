@@ -1,33 +1,80 @@
-FROM python:3.9-slim
+# Etapa de construcción
+FROM python:3.9-slim as builder
 
 WORKDIR /app
 
-# Create logs directory
-RUN mkdir -p /app/src/api/logs && chmod 755 /app/src/api/logs
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Instalar dependencias del sistema necesarias para compilación
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
+# Copiar requirements e instalar dependencias
 COPY requirements.txt .
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Descargar recursos de NLTK
+RUN python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); nltk.download('wordnet')"
 
-# Download NLTK resources
+# Etapa de producción
+FROM python:3.9-slim
+
+# Crear usuario no root
+RUN groupadd -r appuser && useradd -r -g appuser appuser \
+    && mkdir -p /app /app/logs \
+    && chown -R appuser:appuser /app
+
+# Configurar entorno
+WORKDIR /app
+ENV PYTHONPATH=/app:/app/src \
+    PYTHONUNBUFFERED=1 \
+    PYTHONHASHSEED=42 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=100 \
+    POETRY_VERSION=1.1.13
+
+# Instalar dependencias del sistema necesarias en tiempo de ejecución
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    default-mysql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Instalar dependencias directamente en el entorno global
+COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copiar código fuente
+COPY --chown=appuser:appuser src/ src/
+COPY --chown=appuser:appuser data/ data/
+
+# Asegurar permisos
+RUN chown -R appuser:appuser /app \
+    && chmod -R 755 /app/logs
+
+# Crear directorio para nltk_data y ajustar permisos
+RUN mkdir -p /home/appuser/nltk_data \
+    && chown -R appuser:appuser /home/appuser/nltk_data \
+    && chmod -R 755 /home/appuser/nltk_data
+
+# Cambiar a usuario no root
+USER appuser
+
+# Establecer la variable de entorno para NLTK_DATA
+ENV NLTK_DATA=/home/appuser/nltk_data
+
+# Descargar recursos de NLTK como usuario appuser
 RUN python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); nltk.download('wordnet'); nltk.download('punkt_tab')"
 
-# Copy project files
-COPY src/ src/
-COPY data/ data/
-
-# Set environment variables
-ENV PYTHONPATH=/app:/app/src
+# Verificar que se pueden importar los módulos principales
+RUN python -c "from src.api.api import app; print('API module loaded successfully')"
 
 # Exponer puerto
 EXPOSE 8000
 
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
 # Comando para ejecutar la API
-CMD ["uvicorn", "src.api.api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "src.api.api:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

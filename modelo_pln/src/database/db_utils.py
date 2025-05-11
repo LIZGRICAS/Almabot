@@ -3,6 +3,7 @@ import mysql.connector
 from mysql.connector import Error
 from datetime import datetime
 import uuid
+import json
 
 class Database:
     def __init__(self, host: str, user: str, password: str, database: str):
@@ -31,26 +32,31 @@ class Database:
         try:
             if not self.connection:
                 self.connect()
-            
+                
             cursor = self.connection.cursor()
-            audit_id = str(uuid.uuid4())
             
+            # Convertir diccionarios a cadenas JSON
+            old_data_json = json.dumps(old_data) if old_data is not None else None
+            new_data_json = json.dumps(new_data) if new_data is not None else None
+            
+            # Insert audit log
             sql = """
                 INSERT INTO audit_log (id, table_name, record_id, action, old_data, new_data, created_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                VALUES (UUID(), %s, %s, %s, %s, %s, %s)
             """
             cursor.execute(sql, (
-                audit_id,
                 table_name,
                 record_id,
                 action,
-                old_data,
-                new_data,
+                old_data_json,
+                new_data_json,
                 user_id or self.system_user_id
             ))
             self.connection.commit()
         except Error as e:
             print(f"Error logging audit: {e}")
+            print(f"SQL: {sql}")
+            print(f"Params: {(table_name, record_id, action, old_data, new_data, user_id or self.system_user_id)}")
             raise
 
     def create_conversation(self, user_id: str, metadata: Dict[str, Any], created_by: str = None) -> str:
@@ -62,12 +68,15 @@ class Database:
             cursor = self.connection.cursor()
             conversation_id = str(uuid.uuid4())
             
+            # Convert metadata to JSON string
+            metadata_json = json.dumps(metadata) if metadata else None
+            
             # Insert conversation
             sql = """
                 INSERT INTO conversations (id, user_id, metadata, created_by)
                 VALUES (%s, %s, %s, %s)
             """
-            cursor.execute(sql, (conversation_id, user_id, metadata, created_by or self.system_user_id))
+            cursor.execute(sql, (conversation_id, user_id, metadata_json, created_by or self.system_user_id))
             
             # Log audit
             self.log_audit(
@@ -161,8 +170,17 @@ class Database:
     def create_anonymous_user(self, age: Optional[int] = None, neighborhood: Optional[str] = None, school: Optional[str] = None, created_by: str = None) -> str:
         """Create a new anonymous user with audit logging"""
         try:
+            print("Creating anonymous user with data:", {
+                'age': age,
+                'neighborhood': neighborhood,
+                'school': school,
+                'created_by': created_by or self.system_user_id
+            })
+            
             if not self.connection:
-                self.connect()
+                print("No active connection, attempting to connect...")
+                if not self.connect():
+                    raise Error("Failed to connect to database")
             
             cursor = self.connection.cursor()
             user_id = str(uuid.uuid4())
@@ -173,29 +191,52 @@ class Database:
                 INSERT INTO anonymous_users (id, session_id, age, neighborhood, school, created_by)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """
-            cursor.execute(sql, (
+            params = (
                 user_id,
                 session_id,
                 age,
                 neighborhood,
                 school,
                 created_by or self.system_user_id
-            ))
-            
-            # Log audit
-            self.log_audit(
-                table_name='anonymous_users',
-                record_id=user_id,
-                action='INSERT',
-                new_data={'session_id': session_id, 'age': age, 'neighborhood': neighborhood, 'school': school},
-                user_id=created_by
             )
             
+            print("Executing SQL:", sql)
+            print("With params:", params)
+            
+            cursor.execute(sql, params)
+            print("User inserted successfully")
+            
+            try:
+                # Log audit
+                self.log_audit(
+                    table_name='anonymous_users',
+                    record_id=user_id,
+                    action='INSERT',
+                    new_data={'session_id': session_id, 'age': age, 'neighborhood': neighborhood, 'school': school},
+                    user_id=created_by
+                )
+                print("Audit log created successfully")
+            except Exception as audit_error:
+                print(f"Warning: Failed to create audit log: {audit_error}")
+                # Continue even if audit log fails
+            
             self.connection.commit()
+            print(f"Transaction committed. Created user with ID: {user_id}")
             return user_id
         except Error as e:
-            print(f"Error creating anonymous user: {e}")
-            raise
+            error_msg = f"Error creating anonymous user: {str(e)}"
+            print(error_msg)
+            if hasattr(e, 'errno'):
+                print(f"MySQL Error {e.errno}: {e.sqlstate} - {e.msg}")
+            if hasattr(e, '_full_msg'):
+                print("Full error:", e._full_msg)
+            raise Error(error_msg) from e
+        except Exception as e:
+            error_msg = f"Unexpected error in create_anonymous_user: {str(e)}"
+            print(error_msg)
+            import traceback
+            traceback.print_exc()
+            raise Error(error_msg) from e
 
     def create_risk_assessment(self, message_id: str, risk_level: str, risk_type: str, created_by: str = None):
         """Create a new risk assessment with audit logging"""
