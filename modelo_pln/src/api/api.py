@@ -29,13 +29,24 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configuración de CORS - Permitir todos los orígenes
+# Configuración de CORS
+allowed_origins = [
+    "https://mc72r2h5-8000.use2.devtunnels.ms",  # VS Code tunnel URL
+    "http://localhost:8000",
+    "http://localhost:8001",
+    "http://localhost:3000",
+    "http://localhost:5173",  # Vite dev server
+    "https://translate.google.com"  # Google Translate for testing
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permitir todos los orígenes
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=600  # Cache preflight requests for 10 minutes
 )
 
 # Inicializar el chatbot
