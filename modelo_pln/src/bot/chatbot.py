@@ -46,59 +46,86 @@ class Chatbot:
         except Exception as e:
             print(f"Error al guardar log: {e}")
     
-def process_message(self, user_id, message):
-    try:
-        # Initialize variables
-        message_lower = message.lower()
-        prediction = 0
-        confidence = 0.0
-        bullying_type = "ninguno"
-        
-        # First try the model prediction
-        model_prediction, probability = self.bullying_model.predict(message)
-        model_confidence = max(probability) if probability else 0.0
-        
-        # Extract keywords for analysis
-        keywords = self.nlp.extract_keywords(message)
-        
-        # Check for physical bullying keywords
-        if any(word in message_lower for word in ["empujar", "empujan", "golpear", "golpean", "pegar", "pegan"]):
-            bullying_type = "físico"
-            prediction = 1
-            confidence = max(0.9, model_confidence)  # Use at least 0.9 confidence for explicit mentions
-        # If model detected bullying but we haven't categorized it yet
-        elif model_prediction == 1:
-            prediction = 1
-            confidence = model_confidence
+    def process_message(self, user_id, message):
+        try:
+            # Initialize variables
+            message_lower = message.lower()
+            prediction = 0
+            confidence = 0.0
+            bullying_type = "ninguno"
             
-            # Determine bullying type based on keywords
-            if any(word in message_lower for word in ["verbal", "insultar", "insulto", "insultos"]):
-                bullying_type = "verbal"
-            elif any(word in message_lower for word in ["social", "excluir", "excluyen"]):
-                bullying_type = "social"
-            elif any(word in message_lower for word in ["cibernético", "internet", "whatsapp", "mensaje"]):
+            # First try the model prediction
+            model_prediction, probability = self.bullying_model.predict(message)
+            model_confidence = max(probability) if probability else 0.0
+            
+            # Extract keywords for analysis
+            keywords = self.nlp.extract_keywords(message)
+            
+            # Check for physical bullying keywords
+            if any(word in message_lower for word in ["empujar", "empujan", "golpear", "golpean", "pegar", "pegan"]):
+                bullying_type = "físico"
+                prediction = 1
+                confidence = max(0.9, model_confidence)  # Use at least 0.9 confidence for explicit mentions
+            # Check for cyberbullying keywords
+            elif any(word in message_lower for word in ["mensaje", "whatsapp", "facebook", "instagram", "amenaza"]):
                 bullying_type = "cibernético"
-            else:
-                bullying_type = "psicológico"  # Default type if bullying detected but type unclear
-        
-        # Generate appropriate response based on detection
-        response = self._generate_response(prediction, confidence, bullying_type)
-        
-        # Create analysis object
-        analysis = {
-            'is_bullying': bool(prediction),
-            'confidence': float(confidence),
-            'bullying_type': bullying_type,
-            'keywords': keywords
-        }
-        
-        # Save log and return response
-        self._save_log(user_id, message, response, analysis)
-        return response
-        
-    except Exception as e:
-        print(f"Error al procesar el mensaje: {e}")
-        return "Lo siento, ha ocurrido un error al procesar tu mensaje. Por favor, intenta de nuevo."
+                prediction = 1
+                confidence = max(0.85, model_confidence)
+            # Check for verbal bullying keywords
+            elif any(word in message_lower for word in ["insultar", "insulto", "gritar", "burlar", "burla"]):
+                bullying_type = "verbal"
+                prediction = 1
+                confidence = max(0.85, model_confidence)
+            # Check for social bullying keywords
+            elif any(word in message_lower for word in ["excluir", "excluyen", "ignorar", "ignoran", "rechazar"]):
+                bullying_type = "social"
+                prediction = 1
+                confidence = max(0.85, model_confidence)
+            # If model detected bullying but we haven't categorized it yet
+            elif model_prediction == 1:
+                prediction = 1
+                confidence = model_confidence
+                
+                # Determine bullying type based on keywords if not already set
+                if "verbal" in message_lower:
+                    bullying_type = "verbal"
+                elif "social" in message_lower:
+                    bullying_type = "social"
+                elif "cibernético" in message_lower or "internet" in message_lower:
+                    bullying_type = "cibernético"
+                elif "físico" in message_lower:
+                    bullying_type = "físico"
+                else:
+                    bullying_type = "psicológico"  # Default type if bullying detected but type unclear
+            
+            # Generate appropriate response based on detection
+            response = self._generate_response(prediction, confidence, bullying_type)
+            
+            # Create analysis object with additional fields for API compatibility
+            analysis = {
+                'is_bullying': bool(prediction),
+                'confidence': float(confidence),
+                'bullying_type': bullying_type,
+                'keywords': keywords,
+                'sentiment': 'negative' if prediction == 1 else 'neutral',
+                'sentiment_score': 0.3 if prediction == 1 else 0.0,
+                'emotion': {
+                    'type': 'fear' if prediction == 1 else 'neutral',
+                    'intensity': 0.7 if prediction == 1 else 0.0
+                },
+                'risk': {
+                    'level': 'medium' if prediction == 1 else 'low',
+                    'type': 'bullying' if prediction == 1 else 'none'
+                }
+            }
+            
+            # Save log and return response
+            self._save_log(user_id, message, response, analysis)
+            return response, analysis  # Return both response and analysis
+        except Exception as e:
+            print(f"Error al procesar el mensaje: {e}")
+            return "Lo siento, ha ocurrido un error al procesar tu mensaje. Por favor, intenta de nuevo.", {}
+
 
     def _generate_response(self, prediction, confidence, bullying_type):
         # Emergency resources (only show once)

@@ -213,24 +213,23 @@ async def process_message(request: MessageRequest):
                 raise HTTPException(status_code=500, detail=f"Error creating user or conversation: {str(e)}")
             
             # Process the message with the chatbot and get the full analysis
-            response = chatbot.process_message(request.user_id, request.message)
+            response, analysis = chatbot.process_message(request.user_id, request.message)
             print("Message processed successfully")
             logger.debug(f"Response: {response}")
+            logger.debug(f"Analysis: {analysis}")
             
-            # Get the analysis from the chatbot's logs
-            last_log = chatbot.logs[-1] if hasattr(chatbot, 'logs') and chatbot.logs else None
-            
-            # Create the analysis structure with sentiment and other metrics
-            analysis = {
-                'is_bullying': last_log.get('is_bullying', False) if last_log else False,
-                'confidence': last_log.get('confidence', 0.0) if last_log else 0.0,
-                'bullying_type': last_log.get('bullying_type', 'ninguno') if last_log else 'ninguno',
-                'keywords': last_log.get('keywords', []) if last_log else [],
-                'sentiment': last_log.get('sentiment', 'neutral') if last_log else 'neutral',
-                'sentiment_score': last_log.get('sentiment_score', 0.0) if last_log else 0.0,
-                'emotion': last_log.get('emotion', {'type': 'neutral', 'intensity': 0.0}) if last_log else {'type': 'neutral', 'intensity': 0.0},
-                'risk': last_log.get('risk', {'level': 'low', 'type': 'none'}) if last_log else {'level': 'low', 'type': 'none'}
-            }
+            # Ensure analysis has all required fields
+            if not analysis:
+                analysis = {
+                    'is_bullying': False,
+                    'confidence': 0.0,
+                    'bullying_type': 'ninguno',
+                    'keywords': [],
+                    'sentiment': 'neutral',
+                    'sentiment_score': 0.0,
+                    'emotion': {'type': 'neutral', 'intensity': 0.0},
+                    'risk': {'level': 'low', 'type': 'none'}
+                }
             
             # Create message record
             message_id = db.create_message(
