@@ -5,7 +5,7 @@ import sys
 # Añadir el directorio padre al path para importaciones relativas
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from models.logistic_regression_model import BullyingDetectionModel
+from src.models.logistic_regression_model import BullyingDetectionModel
 from sklearn.model_selection import train_test_split
 from sklearn.utils import resample
 from sklearn.model_selection import cross_val_score

@@ -93,7 +93,7 @@ services:
           memory: 2G
     restart: 'no'  # No restart after completion
     command: >
-      bash -c "python -c 'from models.train_model import main; main()' && 
+      bash -c "cd /app && python -c 'from src.models.train_model import main; main()' && 
                echo 'Training completed successfully. The model has been saved.' && 
                exit 0"
     profiles:

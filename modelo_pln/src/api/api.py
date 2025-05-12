@@ -76,6 +76,14 @@ async def log_requests(request: Request, call_next):
 
 # Endpoint de health check
 # Keep the root health check at the app level
+
+@app.get("/")
+async def health_check():
+    """
+    Endpoint para verificar el estado de la API
+    """
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
 @app.get("/health")
 async def health_check():
     """
