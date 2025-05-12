@@ -54,9 +54,20 @@ class Chatbot:
             confidence = 0.0
             bullying_type = "ninguno"
             
-            # First try the model prediction
-            model_prediction, probability = self.bullying_model.predict(message)
-            model_confidence = max(probability) if probability else 0.0
+            # Check for positive sentiment words first
+            positive_words = ["feliz", "contento", "alegre", "bien", "genial", "excelente", "maravilloso", 
+                             "fantástico", "divertido", "agradable", "bueno", "positivo", "encantado"]
+            
+            # If the message contains positive words and is very short, it's likely not bullying
+            if any(word in message_lower for word in positive_words) and len(message_lower.split()) < 5:
+                # Skip model prediction for clearly positive messages
+                model_prediction = 0
+                model_confidence = 0.9
+                probability = [0.9, 0.1]
+            else:
+                # Run model prediction for other messages
+                model_prediction, probability = self.bullying_model.predict(message)
+                model_confidence = max(probability) if probability else 0.0
             
             # Extract keywords for analysis
             keywords = self.nlp.extract_keywords(message)
@@ -137,7 +148,17 @@ class Chatbot:
             "\n- Chat de ayuda: www.chatayuda.org.mx"
         )
         
-        if prediction == 1:
+        # Check for positive messages (when prediction is 0 with high confidence)
+        if prediction == 0 and confidence > 0.8:
+            # Positive response options
+            positive_responses = [
+                "¡Me alegra mucho escuchar que estás feliz! ¿Hay algo específico que te haya hecho sentir así?",
+                "Es genial saber que te sientes bien. ¿Quieres contarme más sobre tu día?",
+                "¡Qué bueno! Es importante reconocer y disfrutar esos momentos positivos. ¿Qué más cosas buenas te han pasado?"
+            ]
+            return random.choice(positive_responses)
+        
+        elif prediction == 1:
             # Base responses by bullying type
             base_responses = {
                 "cibernético": (
