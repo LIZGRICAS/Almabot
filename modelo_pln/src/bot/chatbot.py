@@ -46,179 +46,60 @@ class Chatbot:
         except Exception as e:
             print(f"Error al guardar log: {e}")
     
-    def process_message(self, user_id, message):
-        try:
-            # First, check for clear indicators of bullying
-            message_lower = message.lower()
+def process_message(self, user_id, message):
+    try:
+        # Initialize variables
+        message_lower = message.lower()
+        prediction = 0
+        confidence = 0.0
+        bullying_type = "ninguno"
+        
+        # First try the model prediction
+        model_prediction, probability = self.bullying_model.predict(message)
+        model_confidence = max(probability) if probability else 0.0
+        
+        # Extract keywords for analysis
+        keywords = self.nlp.extract_keywords(message)
+        
+        # Check for physical bullying keywords
+        if any(word in message_lower for word in ["empujar", "empujan", "golpear", "golpean", "pegar", "pegan"]):
+            bullying_type = "físico"
+            prediction = 1
+            confidence = max(0.9, model_confidence)  # Use at least 0.9 confidence for explicit mentions
+        # If model detected bullying but we haven't categorized it yet
+        elif model_prediction == 1:
+            prediction = 1
+            confidence = model_confidence
             
-            # Initialize variables
-            prediction = 0
-            confidence = 0.0
-            bullying_type = "ninguno"
-            
-            # Print debug information
-            print(f"Processing message: {message}")
-            print(f"Lowercase message: {message_lower}")
-            
-            # Check for different types of bullying with specific indicators
-            bullying_indicators = {
-                "cibernético": [
-                    "ciber", "internet", "whatsapp", "redes", "online", "mensaje", 
-                    "red social", "perfil falso", "perfiles falsos", "pantalla", "pantallazo",
-                    "captura", "foto", "fotos", "video", "videos", "comentario", "comentarios",
-                    "publicación", "publicaciones", "publicar", "subir", "subido", "compartir"
-                ],
-                "físico": [
-                    # Verbos de acción violenta
-                    "golpear", "golpeo", "golpeó", "golpearon", "golpeado", "golpeada",
-                    "empujar", "empujo", "empujó", "empujan", "empujaron", "empujado", "empujada",
-                    "pegar", "pego", "pegó", "pegan", "pegaron", "pegado", "pegada",
-                    "empujo", "empujó", "empujan", "empujaron", "empellón", "empellones", "jalar",
-                    "jalo", "jaló", "jaland", "jalado", "jalada", "jalada de pelo", "tirar del pelo",
-                    "escupir", "escupen", "escupió", "escupieron", "patear", "pateo", "pateó",
-                    "patean", "patearon", "morder", "muerdo", "mordió", "mordida", "mordisco",
-                    "pelear", "peleo", "peleó", "pelean", "pelearon", "peleando", "empujones",
-                    "golpes", "patadas", "zancadilla", "zancadillas", "jalón", "jalones", "tirón",
-                    "tirones", "arañar", "araño", "arañó", "arañan", "arañaron", "pellizcar",
-                    "pellizco", "pellizcó", "pellizcan", "pellizcaron",
-                    
-                    # Expresiones comunes
-                    "me pegan", "me golpean", "me empujan", "me patean", "me escupen",
-                    "me jalonean", "me dan de golpes", "me dan de patadas", "me dan de empujones",
-                    "me hacen daño físico", "me lastiman", "me hieren", "me agreden"
-                ],
-                "verbal": [
-                    "insultar", "insulto", "insultos", "insultan", "insultado", "insultada",
-                    "ofender", "ofendo", "ofendió", "ofenden", "ofendido", "ofendida", "gritar",
-                    "grito", "gritan", "gritándome", "gritando", "gritar", "gritón", "gritona",
-                    "burla", "burlas", "burlan", "burlándose", "burlado", "burlada", "burlarse",
-                    "humillar", "humillan", "humillado", "humillación", "humillando", "molestar",
-                    "molestan", "molestando", "molestado", "molestada", "molestoso", "molestosa",
-                    "molestón", "molestona", "molestia", "molestias", "molestamente"
-                ],
-                "social": [
-                    "excluir", "excluyen", "excluido", "excluida", "exclusión", "ignorar",
-                    "ignoran", "ignorado", "ignorada", "ignorancia", "hablar mal", "hablan mal",
-                    "habló mal", "hablaron mal", "difamar", "difamación", "difamado", "difamada",
-                    "rumor", "rumores", "chisme", "chismes", "chismear", "chismeando", "chismoso",
-                    "chismosa", "rechazar", "rechazan", "rechazado", "rechazada", "rechazo",
-                    "rechazos", "rechazando", "rechazante", "rechazador", "rechazadora"
-                ],
-                "psicológico": [
-                    "amenazar", "amenaza", "amenazas", "amenazado", "amenazada", "amenazando",
-                    "intimidar", "intimido", "intimidó", "intimidan", "intimidado", "intimidación",
-                    "asustar", "asusto", "asustó", "asustan", "asustado", "asustada", "atemorizar",
-                    "atemorizo", "atemorizó", "atemorizan", "atemorizado", "atemorizada", "acosar",
-                    "acoso", "acosado", "acosada", "acosador", "acosadora", "acosamiento", "acosante",
-                    "acosad@", "acosadx", "acosad@", "acosadxs", "acosad@s", "acosadxs"
-                ]
-            }
-            
-            # Special case for direct threats which should always be considered bullying
-            if any(term in message_lower for term in ["amenaza", "amenazas", "amenazando", "amenazado", "amenazada"]):
-                bullying_type = "cibernético" if any(term in message_lower for term in ["internet", "red", "whatsapp", "online"]) else "psicológico"
-                prediction = 1
-                confidence = 0.95
-            
-            # Special case for physical violence in present or past tense
-            physical_indicators = [
-                # Empujar
-                "empujan", "empujaron", "empujó", "empujé", "empujaste", "empujamos", "empujasteis",
-                "empujaba", "empujabas", "empujábamos", "empujabais", "empujaban", "empujaré",
-                "empujarás", "empujará", "empujaremos", "empujaréis", "empujarán", "empujaría",
-                "empujarías", "empujaríamos", "empujaríais", "empujarían", "empujando", "empujado",
-                # Golpear
-                "golpean", "golpearon", "golpeó", "golpeé", "golpeaste", "golpeamos", "golpeasteis",
-                "golpeaba", "golpeabas", "golpeábamos", "golpeabais", "golpeaban", "golpearé",
-                "golpearás", "golpeará", "golpearemos", "golpearéis", "golpearán", "golpearía",
-                "golpearías", "golpearíamos", "golpearíais", "golpearían", "golpeando", "golpeado",
-                # Pegar
-                "pegan", "pegaron", "pegó", "pegué", "pegaste", "pegamos", "pegasteis",
-                "pegaba", "pegabas", "pegábamos", "pegabais", "pegaban", "pegaré",
-                "pegarás", "pegará", "pegaremos", "pegaréis", "pegarán", "pegaría",
-                "pegarías", "pegaríamos", "pegaríais", "pegarían", "pegando", "pegado",
-                # Pelear
-                "pelean", "pelearon", "peleó", "peleé", "peleaste", "peleamos", "peleasteis",
-                "peleaba", "peleabas", "peleábamos", "peleabais", "peleaban", "pelearé",
-                "pelearás", "peleará", "pelearemos", "pelearéis", "pelearán", "pelearía",
-                "pelearías", "pelearíamos", "pelearíais", "pelearían", "peleando", "peleado",
-                # Otros verbos relacionados con violencia física
-                "golpe", "golpes", "puñetazo", "puñetazos", "patada", "patadas", "empujón", "empujones",
-                "jalón", "jalones", "tirón", "tirones", "mordisco", "mordiscos", "arañazo", "arañazos"
-            ]
-            
-            # Verificar si hay indicadores de violencia física en el mensaje
-            matching_indicators = [indicator for indicator in physical_indicators if indicator in message_lower]
-            if matching_indicators:
-                bullying_type = "físico"
-                prediction = 1
-                confidence = 0.95
-                
-                # Aumentar la confianza si hay múltiples indicadores
-                indicator_count = len(matching_indicators)
-                if indicator_count > 1:
-                    confidence = min(0.99, confidence + (indicator_count * 0.05))
-                
-                print(f"Detected physical bullying indicators: {matching_indicators}")
-                print(f"Bullying type: {bullying_type}, Confidence: {confidence}")
-            # Check for each type of bullying
-            for b_type, indicators in bullying_indicators.items():
-                if any(indicator in message_lower for indicator in indicators):
-                    bullying_type = b_type
-                    prediction = 1
-                    confidence = 0.9  # High confidence when indicators are present
-                    break
-            
-            # If no specific type detected but message is concerning
-            concerning_phrases = [
-                "ayuda", "miedo", "triste", "solo", "sola", "solitario", "solitario",
-                "asustado", "asustada", "asustados", "asustadas", "tengo miedo", "tengo temor",
-                "no sé qué hacer", "no puedo más", "estoy harto", "estoy harta", "no aguanto más",
-                "me da miedo", "me asusta", "me preocupa", "me siento mal", "me duele", "me lastima",
-                "no quiero ir a la escuela", "tengo miedo de ir", "no me siento seguro", "me hacen daño"
-            ]
-            
-            if prediction == 0 and any(phrase in message_lower for phrase in concerning_phrases):
-                bullying_type = "psicológico" if bullying_type == "ninguno" else bullying_type
-                prediction = 1
-                confidence = 0.8
-                confidence = max(0.7, confidence)  # No bajar la confianza si ya es más alta
-            
-            # Get model prediction if we're not already sure
-            if prediction == 0:
-                prediction, probability = self.bullying_model.predict(message)
-                confidence = max(probability)
-                if prediction == 1 and bullying_type == "ninguno":
-                    bullying_type = "other"
-            # If we detected bullying through indicators but model disagrees, trust the indicators
-            elif prediction == 1 and bullying_type != "ninguno":
-                # Keep our high confidence for indicator-based detection
-                confidence = 0.9
-            
-            # Extract keywords for analysis
-            keywords = self.nlp.extract_keywords(message)
-            
-            # Generate appropriate response
-            response = self._generate_response(prediction, confidence, bullying_type)
-            
-            # Prepare analysis data
-            analysis = {
-                'is_bullying': bool(prediction),
-                'confidence': float(confidence),
-                'bullying_type': bullying_type,
-                'keywords': keywords,
-                'message': message,
-                'prediction': str(prediction),
-                'model_confidence': float(confidence)
-            }
-            self._save_log(user_id, message, response, analysis)
-            
-            return response
-            
-        except Exception as e:
-            print(f"Error al procesar el mensaje: {e}")
-            return "Lo siento, ha ocurrido un error al procesar tu mensaje. Por favor, intenta de nuevo."
-    
+            # Determine bullying type based on keywords
+            if any(word in message_lower for word in ["verbal", "insultar", "insulto", "insultos"]):
+                bullying_type = "verbal"
+            elif any(word in message_lower for word in ["social", "excluir", "excluyen"]):
+                bullying_type = "social"
+            elif any(word in message_lower for word in ["cibernético", "internet", "whatsapp", "mensaje"]):
+                bullying_type = "cibernético"
+            else:
+                bullying_type = "psicológico"  # Default type if bullying detected but type unclear
+        
+        # Generate appropriate response based on detection
+        response = self._generate_response(prediction, confidence, bullying_type)
+        
+        # Create analysis object
+        analysis = {
+            'is_bullying': bool(prediction),
+            'confidence': float(confidence),
+            'bullying_type': bullying_type,
+            'keywords': keywords
+        }
+        
+        # Save log and return response
+        self._save_log(user_id, message, response, analysis)
+        return response
+        
+    except Exception as e:
+        print(f"Error al procesar el mensaje: {e}")
+        return "Lo siento, ha ocurrido un error al procesar tu mensaje. Por favor, intenta de nuevo."
+
     def _generate_response(self, prediction, confidence, bullying_type):
         # Emergency resources (only show once)
         emergency_resources = (
