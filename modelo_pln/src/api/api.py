@@ -36,6 +36,7 @@ allowed_origins = [
     "http://localhost:8001",
     "http://localhost:3000",
     "http://localhost:5173",  # Vite dev server
+    "https://almachatbot.vercel.app",  # Vite dev server
     "https://translate.google.com"  # Google Translate for testing
 ]
 
