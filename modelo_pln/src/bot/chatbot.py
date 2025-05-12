@@ -56,6 +56,10 @@ class Chatbot:
             confidence = 0.0
             bullying_type = "ninguno"
             
+            # Print debug information
+            print(f"Processing message: {message}")
+            print(f"Lowercase message: {message_lower}")
+            
             # Check for different types of bullying with specific indicators
             bullying_indicators = {
                 "cibernético": [
@@ -65,13 +69,23 @@ class Chatbot:
                     "publicación", "publicaciones", "publicar", "subir", "subido", "compartir"
                 ],
                 "físico": [
-                    "golpear", "golpeo", "golpeado", "golpeada", "golpean", "golpearon",
-                    "pegar", "pego", "pegó", "pegan", "pegaron", "golpes", "moretón", "moretones",
-                    "herida", "heridas", "herir", "lastimar", "lastimado", "lastimada", "empujar",
+                    # Verbos de acción violenta
+                    "golpear", "golpeo", "golpeó", "golpearon", "golpeado", "golpeada",
+                    "empujar", "empujo", "empujó", "empujan", "empujaron", "empujado", "empujada",
+                    "pegar", "pego", "pegó", "pegan", "pegaron", "pegado", "pegada",
                     "empujo", "empujó", "empujan", "empujaron", "empellón", "empellones", "jalar",
                     "jalo", "jaló", "jaland", "jalado", "jalada", "jalada de pelo", "tirar del pelo",
                     "escupir", "escupen", "escupió", "escupieron", "patear", "pateo", "pateó",
-                    "patean", "patearon", "morder", "muerdo", "mordió", "mordida", "mordisco"
+                    "patean", "patearon", "morder", "muerdo", "mordió", "mordida", "mordisco",
+                    "pelear", "peleo", "peleó", "pelean", "pelearon", "peleando", "empujones",
+                    "golpes", "patadas", "zancadilla", "zancadillas", "jalón", "jalones", "tirón",
+                    "tirones", "arañar", "araño", "arañó", "arañan", "arañaron", "pellizcar",
+                    "pellizco", "pellizcó", "pellizcan", "pellizcaron",
+                    
+                    # Expresiones comunes
+                    "me pegan", "me golpean", "me empujan", "me patean", "me escupen",
+                    "me jalonean", "me dan de golpes", "me dan de patadas", "me dan de empujones",
+                    "me hacen daño físico", "me lastiman", "me hieren", "me agreden"
                 ],
                 "verbal": [
                     "insultar", "insulto", "insultos", "insultan", "insultado", "insultada",
@@ -105,6 +119,48 @@ class Chatbot:
                 bullying_type = "cibernético" if any(term in message_lower for term in ["internet", "red", "whatsapp", "online"]) else "psicológico"
                 prediction = 1
                 confidence = 0.95
+            
+            # Special case for physical violence in present or past tense
+            physical_indicators = [
+                # Empujar
+                "empujan", "empujaron", "empujó", "empujé", "empujaste", "empujamos", "empujasteis",
+                "empujaba", "empujabas", "empujábamos", "empujabais", "empujaban", "empujaré",
+                "empujarás", "empujará", "empujaremos", "empujaréis", "empujarán", "empujaría",
+                "empujarías", "empujaríamos", "empujaríais", "empujarían", "empujando", "empujado",
+                # Golpear
+                "golpean", "golpearon", "golpeó", "golpeé", "golpeaste", "golpeamos", "golpeasteis",
+                "golpeaba", "golpeabas", "golpeábamos", "golpeabais", "golpeaban", "golpearé",
+                "golpearás", "golpeará", "golpearemos", "golpearéis", "golpearán", "golpearía",
+                "golpearías", "golpearíamos", "golpearíais", "golpearían", "golpeando", "golpeado",
+                # Pegar
+                "pegan", "pegaron", "pegó", "pegué", "pegaste", "pegamos", "pegasteis",
+                "pegaba", "pegabas", "pegábamos", "pegabais", "pegaban", "pegaré",
+                "pegarás", "pegará", "pegaremos", "pegaréis", "pegarán", "pegaría",
+                "pegarías", "pegaríamos", "pegaríais", "pegarían", "pegando", "pegado",
+                # Pelear
+                "pelean", "pelearon", "peleó", "peleé", "peleaste", "peleamos", "peleasteis",
+                "peleaba", "peleabas", "peleábamos", "peleabais", "peleaban", "pelearé",
+                "pelearás", "peleará", "pelearemos", "pelearéis", "pelearán", "pelearía",
+                "pelearías", "pelearíamos", "pelearíais", "pelearían", "peleando", "peleado",
+                # Otros verbos relacionados con violencia física
+                "golpe", "golpes", "puñetazo", "puñetazos", "patada", "patadas", "empujón", "empujones",
+                "jalón", "jalones", "tirón", "tirones", "mordisco", "mordiscos", "arañazo", "arañazos"
+            ]
+            
+            # Verificar si hay indicadores de violencia física en el mensaje
+            matching_indicators = [indicator for indicator in physical_indicators if indicator in message_lower]
+            if matching_indicators:
+                bullying_type = "físico"
+                prediction = 1
+                confidence = 0.95
+                
+                # Aumentar la confianza si hay múltiples indicadores
+                indicator_count = len(matching_indicators)
+                if indicator_count > 1:
+                    confidence = min(0.99, confidence + (indicator_count * 0.05))
+                
+                print(f"Detected physical bullying indicators: {matching_indicators}")
+                print(f"Bullying type: {bullying_type}, Confidence: {confidence}")
             # Check for each type of bullying
             for b_type, indicators in bullying_indicators.items():
                 if any(indicator in message_lower for indicator in indicators):
@@ -114,10 +170,19 @@ class Chatbot:
                     break
             
             # If no specific type detected but message is concerning
-            if prediction == 0 and any(word in message_lower for word in ["ayuda", "miedo", "triste", "solo", "sola", "solitario", "solitario"]):
-                bullying_type = "other"
+            concerning_phrases = [
+                "ayuda", "miedo", "triste", "solo", "sola", "solitario", "solitario",
+                "asustado", "asustada", "asustados", "asustadas", "tengo miedo", "tengo temor",
+                "no sé qué hacer", "no puedo más", "estoy harto", "estoy harta", "no aguanto más",
+                "me da miedo", "me asusta", "me preocupa", "me siento mal", "me duele", "me lastima",
+                "no quiero ir a la escuela", "tengo miedo de ir", "no me siento seguro", "me hacen daño"
+            ]
+            
+            if prediction == 0 and any(phrase in message_lower for phrase in concerning_phrases):
+                bullying_type = "psicológico" if bullying_type == "ninguno" else bullying_type
                 prediction = 1
-                confidence = 0.7
+                confidence = 0.8
+                confidence = max(0.7, confidence)  # No bajar la confianza si ya es más alta
             
             # Get model prediction if we're not already sure
             if prediction == 0:

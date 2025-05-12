@@ -1,0 +1,102 @@
+services:
+  db_8001:
+    image: mysql:8.0
+    container_name: almabot-db-8001
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-almabot_root}
+      MYSQL_DATABASE: ${DB_NAME:-almabot}
+      MYSQL_USER: ${DB_USER:-almabot}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-almabot123}
+      MYSQL_ROOT_HOST: '%'
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data_8001:/var/lib/mysql
+      - ./src/database/schema.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${DB_USER:-almabot}", "-p${DB_PASSWORD:-almabot123}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  training_8001:
+    build:
+      context: .
+      dockerfile: Dockerfile.train
+    container_name: almabot-training-8001
+    environment:
+      - DB_HOST=db_8001
+      - DB_USER=${DB_USER:-almabot}
+      - DB_PASSWORD=${DB_PASSWORD:-almabot123}
+      - DB_NAME=${DB_NAME:-almabot}
+      - PYTHONUNBUFFERED=1
+      - MODEL_PATH=/app/data/models/model_8001
+    volumes:
+      - ./data/models:/app/data/models
+      - ./data/raw:/app/data/raw
+      - ./src:/app/src
+    depends_on:
+      db_8001:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          memory: 2G
+    restart: 'on-failure'
+    command: >
+      bash -c "mkdir -p /app/data/models && 
+               cd /app && 
+               python -c 'from src.models.train_model import main; main()' && 
+               echo 'Training completed successfully. The model has been saved.' && 
+               exit 0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  api_8001:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: almabot-api-8001
+    ports:
+      - "8001:8000"
+    environment:
+      - DB_HOST=db_8001
+      - DB_PORT=3306
+      - DB_NAME=${DB_NAME:-almabot}
+      - DB_USER=${DB_USER:-almabot}
+      - DB_PASSWORD=${DB_PASSWORD:-almabot123}
+      - MODEL_PATH=/app/data/models/model_8001
+    volumes:
+      - ./data/models:/app/data/models
+      - ./src:/app/src
+    depends_on:
+      db_8001:
+        condition: service_healthy
+      training_8001:
+        condition: service_completed_successfully
+
+
+
+volumes:
+  mysql_data_8001:
+    name: almabot_mysql_data_8001
+    driver: local
+
+networks:
+  almabot-network-8001:
+    driver: bridge
