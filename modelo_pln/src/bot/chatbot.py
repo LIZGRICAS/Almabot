@@ -106,13 +106,12 @@ class Chatbot:
                 prediction = 1
                 confidence = 0.95
             # Check for each type of bullying
-            elif any(indicator in message_lower for indicators in bullying_indicators.values() for indicator in indicators):
-                for b_type, indicators in bullying_indicators.items():
-                    if any(indicator in message_lower for indicator in indicators):
-                        bullying_type = b_type
-                        prediction = 1
-                        confidence = 0.9  # High confidence when indicators are present
-                        break
+            for b_type, indicators in bullying_indicators.items():
+                if any(indicator in message_lower for indicator in indicators):
+                    bullying_type = b_type
+                    prediction = 1
+                    confidence = 0.9  # High confidence when indicators are present
+                    break
             
             # If no specific type detected but message is concerning
             if prediction == 0 and any(word in message_lower for word in ["ayuda", "miedo", "triste", "solo", "sola", "solitario", "solitario"]):
@@ -126,6 +125,10 @@ class Chatbot:
                 confidence = max(probability)
                 if prediction == 1 and bullying_type == "ninguno":
                     bullying_type = "other"
+            # If we detected bullying through indicators but model disagrees, trust the indicators
+            elif prediction == 1 and bullying_type != "ninguno":
+                # Keep our high confidence for indicator-based detection
+                confidence = 0.9
             
             # Extract keywords for analysis
             keywords = self.nlp.extract_keywords(message)
