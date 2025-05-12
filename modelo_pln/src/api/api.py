@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, APIRouter, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -26,6 +27,15 @@ app = FastAPI(
     title="Chatbot Anti-Bullying API",
     description="API para detección y respuesta a casos de bullying",
     version="1.0.0"
+)
+
+# Configuración de CORS - Permitir todos los orígenes
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Permitir todos los orígenes
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Inicializar el chatbot
