@@ -48,109 +48,96 @@ class Chatbot:
     
     def process_message(self, user_id, message):
         try:
-            # First, check for clear indicators of bullying
-            message_lower = message.lower()
-            
             # Initialize variables
+            message_lower = message.lower()
             prediction = 0
             confidence = 0.0
             bullying_type = "ninguno"
             
-            # Check for different types of bullying with specific indicators
-            bullying_indicators = {
-                "cibernético": [
-                    "ciber", "internet", "whatsapp", "redes", "online", "mensaje", 
-                    "red social", "perfil falso", "perfiles falsos", "pantalla", "pantallazo",
-                    "captura", "foto", "fotos", "video", "videos", "comentario", "comentarios",
-                    "publicación", "publicaciones", "publicar", "subir", "subido", "compartir"
-                ],
-                "físico": [
-                    "golpear", "golpeo", "golpeado", "golpeada", "golpean", "golpearon",
-                    "pegar", "pego", "pegó", "pegan", "pegaron", "golpes", "moretón", "moretones",
-                    "herida", "heridas", "herir", "lastimar", "lastimado", "lastimada", "empujar",
-                    "empujo", "empujó", "empujan", "empujaron", "empellón", "empellones", "jalar",
-                    "jalo", "jaló", "jaland", "jalado", "jalada", "jalada de pelo", "tirar del pelo",
-                    "escupir", "escupen", "escupió", "escupieron", "patear", "pateo", "pateó",
-                    "patean", "patearon", "morder", "muerdo", "mordió", "mordida", "mordisco"
-                ],
-                "verbal": [
-                    "insultar", "insulto", "insultos", "insultan", "insultado", "insultada",
-                    "ofender", "ofendo", "ofendió", "ofenden", "ofendido", "ofendida", "gritar",
-                    "grito", "gritan", "gritándome", "gritando", "gritar", "gritón", "gritona",
-                    "burla", "burlas", "burlan", "burlándose", "burlado", "burlada", "burlarse",
-                    "humillar", "humillan", "humillado", "humillación", "humillando", "molestar",
-                    "molestan", "molestando", "molestado", "molestada", "molestoso", "molestosa",
-                    "molestón", "molestona", "molestia", "molestias", "molestamente"
-                ],
-                "social": [
-                    "excluir", "excluyen", "excluido", "excluida", "exclusión", "ignorar",
-                    "ignoran", "ignorado", "ignorada", "ignorancia", "hablar mal", "hablan mal",
-                    "habló mal", "hablaron mal", "difamar", "difamación", "difamado", "difamada",
-                    "rumor", "rumores", "chisme", "chismes", "chismear", "chismeando", "chismoso",
-                    "chismosa", "rechazar", "rechazan", "rechazado", "rechazada", "rechazo",
-                    "rechazos", "rechazando", "rechazante", "rechazador", "rechazadora"
-                ],
-                "psicológico": [
-                    "amenazar", "amenaza", "amenazas", "amenazado", "amenazada", "amenazando",
-                    "intimidar", "intimido", "intimidó", "intimidan", "intimidado", "intimidación",
-                    "asustar", "asusto", "asustó", "asustan", "asustado", "asustada", "atemorizar",
-                    "atemorizo", "atemorizó", "atemorizan", "atemorizado", "atemorizada", "acosar",
-                    "acoso", "acosado", "acosada", "acosador", "acosadora", "acosamiento", "acosante",
-                    "acosad@", "acosadx", "acosad@", "acosadxs", "acosad@s", "acosadxs"
-                ]
-            }
+            # Check for positive sentiment words first
+            positive_words = ["feliz", "contento", "alegre", "bien", "genial", "excelente", "maravilloso", 
+                             "fantástico", "divertido", "agradable", "bueno", "positivo", "encantado"]
             
-            # Special case for direct threats which should always be considered bullying
-            if any(term in message_lower for term in ["amenaza", "amenazas", "amenazando", "amenazado", "amenazada"]):
-                bullying_type = "cibernético" if any(term in message_lower for term in ["internet", "red", "whatsapp", "online"]) else "psicológico"
-                prediction = 1
-                confidence = 0.95
-            # Check for each type of bullying
-            elif any(indicator in message_lower for indicators in bullying_indicators.values() for indicator in indicators):
-                for b_type, indicators in bullying_indicators.items():
-                    if any(indicator in message_lower for indicator in indicators):
-                        bullying_type = b_type
-                        prediction = 1
-                        confidence = 0.9  # High confidence when indicators are present
-                        break
-            
-            # If no specific type detected but message is concerning
-            if prediction == 0 and any(word in message_lower for word in ["ayuda", "miedo", "triste", "solo", "sola", "solitario", "solitario"]):
-                bullying_type = "other"
-                prediction = 1
-                confidence = 0.7
-            
-            # Get model prediction if we're not already sure
-            if prediction == 0:
-                prediction, probability = self.bullying_model.predict(message)
-                confidence = max(probability)
-                if prediction == 1 and bullying_type == "ninguno":
-                    bullying_type = "other"
+            # If the message contains positive words and is very short, it's likely not bullying
+            if any(word in message_lower for word in positive_words) and len(message_lower.split()) < 5:
+                # Skip model prediction for clearly positive messages
+                model_prediction = 0
+                model_confidence = 0.9
+                probability = [0.9, 0.1]
+            else:
+                # Run model prediction for other messages
+                model_prediction, probability = self.bullying_model.predict(message)
+                model_confidence = max(probability) if probability else 0.0
             
             # Extract keywords for analysis
             keywords = self.nlp.extract_keywords(message)
             
-            # Generate appropriate response
+            # Check for physical bullying keywords
+            if any(word in message_lower for word in ["empujar", "empujan", "golpear", "golpean", "pegar", "pegan"]):
+                bullying_type = "físico"
+                prediction = 1
+                confidence = max(0.9, model_confidence)  # Use at least 0.9 confidence for explicit mentions
+            # Check for cyberbullying keywords
+            elif any(word in message_lower for word in ["mensaje", "whatsapp", "facebook", "instagram", "amenaza"]):
+                bullying_type = "cibernético"
+                prediction = 1
+                confidence = max(0.85, model_confidence)
+            # Check for verbal bullying keywords
+            elif any(word in message_lower for word in ["insultar", "insulto", "gritar", "burlar", "burla"]):
+                bullying_type = "verbal"
+                prediction = 1
+                confidence = max(0.85, model_confidence)
+            # Check for social bullying keywords
+            elif any(word in message_lower for word in ["excluir", "excluyen", "ignorar", "ignoran", "rechazar"]):
+                bullying_type = "social"
+                prediction = 1
+                confidence = max(0.85, model_confidence)
+            # If model detected bullying but we haven't categorized it yet
+            elif model_prediction == 1:
+                prediction = 1
+                confidence = model_confidence
+                
+                # Determine bullying type based on keywords if not already set
+                if "verbal" in message_lower:
+                    bullying_type = "verbal"
+                elif "social" in message_lower:
+                    bullying_type = "social"
+                elif "cibernético" in message_lower or "internet" in message_lower:
+                    bullying_type = "cibernético"
+                elif "físico" in message_lower:
+                    bullying_type = "físico"
+                else:
+                    bullying_type = "psicológico"  # Default type if bullying detected but type unclear
+            
+            # Generate appropriate response based on detection
             response = self._generate_response(prediction, confidence, bullying_type)
             
-            # Prepare analysis data
+            # Create analysis object with additional fields for API compatibility
             analysis = {
                 'is_bullying': bool(prediction),
                 'confidence': float(confidence),
                 'bullying_type': bullying_type,
                 'keywords': keywords,
-                'message': message,
-                'prediction': str(prediction),
-                'model_confidence': float(confidence)
+                'sentiment': 'negative' if prediction == 1 else 'neutral',
+                'sentiment_score': 0.3 if prediction == 1 else 0.0,
+                'emotion': {
+                    'type': 'fear' if prediction == 1 else 'neutral',
+                    'intensity': 0.7 if prediction == 1 else 0.0
+                },
+                'risk': {
+                    'level': 'medium' if prediction == 1 else 'low',
+                    'type': 'bullying' if prediction == 1 else 'none'
+                }
             }
+            
+            # Save log and return response
             self._save_log(user_id, message, response, analysis)
-            
-            return response
-            
+            return response, analysis  # Return both response and analysis
         except Exception as e:
             print(f"Error al procesar el mensaje: {e}")
-            return "Lo siento, ha ocurrido un error al procesar tu mensaje. Por favor, intenta de nuevo."
-    
+            return "Lo siento, ha ocurrido un error al procesar tu mensaje. Por favor, intenta de nuevo.", {}
+
+
     def _generate_response(self, prediction, confidence, bullying_type):
         # Emergency resources (only show once)
         emergency_resources = (
@@ -161,7 +148,17 @@ class Chatbot:
             "\n- Chat de ayuda: www.chatayuda.org.mx"
         )
         
-        if prediction == 1:
+        # Check for positive messages (when prediction is 0 with high confidence)
+        if prediction == 0 and confidence > 0.8:
+            # Positive response options
+            positive_responses = [
+                "¡Me alegra mucho escuchar que estás feliz! ¿Hay algo específico que te haya hecho sentir así?",
+                "Es genial saber que te sientes bien. ¿Quieres contarme más sobre tu día?",
+                "¡Qué bueno! Es importante reconocer y disfrutar esos momentos positivos. ¿Qué más cosas buenas te han pasado?"
+            ]
+            return random.choice(positive_responses)
+        
+        elif prediction == 1:
             # Base responses by bullying type
             base_responses = {
                 "cibernético": (
