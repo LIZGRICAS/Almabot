@@ -1,0 +1,6 @@
+{
+    "final_estimator__class_weight": "balanced",
+    "final_estimator__max_depth": 15,
+    "final_estimator__min_samples_split": 2,
+    "final_estimator__n_estimators": 75
+}

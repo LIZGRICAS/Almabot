@@ -42,11 +42,15 @@ ENV PYTHONPATH=/app:/app/src \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     default-mysql-client \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Instalar dependencias del builder
 COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Instalar explícitamente el módulo requests para asegurar que esté disponible
+RUN pip install --no-cache-dir requests
 
 # Copiar código fuente
 COPY --chown=appuser:appuser src/ src/

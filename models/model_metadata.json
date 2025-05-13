@@ -1,0 +1,13 @@
+{
+  "model_type": "StackingClassifier",
+  "base_models": [
+    "LogisticRegression",
+    "SVC"
+  ],
+  "final_estimator": "RandomForestClassifier",
+  "classes": [
+    0,
+    1
+  ],
+  "n_classes": 2
+}

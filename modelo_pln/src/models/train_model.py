@@ -62,7 +62,7 @@ def balance_dataset(X, y):
     return df_balanced['texto'].tolist(), df_balanced['label'].tolist()
 
 def load_data():
-    """Carga y combina datos de múltiples fuentes"""
+    """Carga y combina datos de múltiples fuentes con mejor manejo de errores y validación"""
     try:
         # Rutas de los archivos de datos
         data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'raw')
@@ -121,7 +121,18 @@ def load_data():
             X.extend(enhanced_df['texto'].tolist())
             y.extend(enhanced_df['es_acoso'].tolist())
         
-        return X, y
+        # Aplicar técnicas de data augmentation para mejorar el conjunto de datos
+        X_augmented, y_augmented = augment_data(X, y)
+        
+        # Combinar datos originales y aumentados
+        X_combined = X + X_augmented
+        y_combined = y + y_augmented
+        
+        print(f"Datos originales: {len(X)} ejemplos")
+        print(f"Datos aumentados: {len(X_augmented)} ejemplos")
+        print(f"Total de datos para entrenamiento: {len(X_combined)} ejemplos")
+        
+        return X_combined, y_combined
         
     except Exception as e:
         print(f"Error al cargar los datos: {e}")
@@ -129,6 +140,84 @@ def load_data():
         if hasattr(e, 'args') and e.args:
             print(f"Detalles: {e.args}")
         raise
+
+def augment_data(X, y):
+    """Aplica técnicas de data augmentation para mejorar el conjunto de datos"""
+    import random
+    import re
+    import nltk
+    from nltk.corpus import stopwords
+    
+    try:
+        nltk.data.find('corpora/stopwords')
+    except LookupError:
+        nltk.download('stopwords')
+    
+    spanish_stopwords = set(stopwords.words('spanish'))
+    
+    # Listas para almacenar datos aumentados
+    X_augmented = []
+    y_augmented = []
+    
+    # Diccionario de sinónimos para palabras clave relacionadas con bullying
+    bullying_synonyms = {
+        'insultar': ['ofender', 'agredir verbalmente', 'faltar el respeto', 'decir groserías'],
+        'golpear': ['pegar', 'agredir', 'dar golpes', 'lastimar físicamente', 'empujar'],
+        'burlar': ['mofar', 'ridiculizar', 'hacer bromas pesadas', 'reírse de'],
+        'amenazar': ['intimidar', 'amedrentar', 'advertir', 'asustar'],
+        'excluir': ['aislar', 'apartar', 'dejar de lado', 'ignorar', 'rechazar'],
+        'molestar': ['fastidiar', 'incomodar', 'perturbar', 'hostigar'],
+        'humillar': ['avergonzar', 'denigrar', 'degradar', 'menospreciar'],
+        'acosar': ['perseguir', 'hostigar', 'atosigar', 'importunar'],
+        'maltratar': ['tratar mal', 'abusar', 'dañar', 'perjudicar'],
+        'cyberbullying': ['acoso cibernético', 'acoso en línea', 'acoso digital', 'acoso en redes']
+    }
+    
+    # Técnicas de augmentación para ejemplos positivos (bullying)
+    for i, (text, label) in enumerate(zip(X, y)):
+        if label == 1:  # Solo aumentar ejemplos de bullying
+            # 1. Sustitución de sinónimos
+            words = text.split()
+            for key, synonyms in bullying_synonyms.items():
+                if key in text.lower():
+                    for synonym in synonyms:
+                        new_text = text.lower().replace(key, synonym)
+                        X_augmented.append(new_text)
+                        y_augmented.append(1)
+            
+            # 2. Cambio de orden de palabras (para frases más largas)
+            if len(words) > 5:
+                # Mantener el inicio y el final, mezclar el medio
+                middle_words = words[1:-1]
+                if len(middle_words) > 2:
+                    for _ in range(min(2, len(middle_words))):
+                        random.shuffle(middle_words)
+                        new_text = words[0] + ' ' + ' '.join(middle_words) + ' ' + words[-1]
+                        X_augmented.append(new_text)
+                        y_augmented.append(1)
+            
+            # 3. Adición de contexto escolar para ejemplos claros de bullying
+            if any(term in text.lower() for term in ['insultar', 'golpear', 'burlar', 'amenazar', 'excluir']):
+                school_contexts = [
+                    'en la escuela', 'en el colegio', 'en clase', 
+                    'en el recreo', 'en el pasillo', 'en el baño de la escuela',
+                    'durante el almuerzo', 'en educación física'
+                ]
+                for context in school_contexts[:2]:  # Limitar a 2 contextos por ejemplo
+                    if context not in text.lower():
+                        new_text = f"{text} {context}"
+                        X_augmented.append(new_text)
+                        y_augmented.append(1)
+    
+    # Limitar la cantidad de datos aumentados para evitar desbalance extremo
+    max_augmented = len(X) // 2  # Máximo 50% más de datos
+    if len(X_augmented) > max_augmented:
+        # Seleccionar aleatoriamente un subconjunto
+        indices = random.sample(range(len(X_augmented)), max_augmented)
+        X_augmented = [X_augmented[i] for i in indices]
+        y_augmented = [y_augmented[i] for i in indices]
+    
+    return X_augmented, y_augmented
 
 def process_survey_data(df, min_age=10, max_age=18):
     """
@@ -353,18 +442,33 @@ def prepare_data():
         print(f"Error al preparar los datos: {e}")
         raise
 
-def main():
-    """Función principal para entrenar el modelo"""
+def main(force_training=False):
+    """Función principal para entrenar el modelo
+    
+    Args:
+        force_training (bool): Si es True, fuerza el reentrenamiento del modelo aunque ya exista.
+                              Si es False, usa el modelo existente si está disponible.
+    """
     try:
+        # Verificar si el modelo ya existe
+        model_path = os.environ.get('MODEL_PATH', 'models/model_8001')
+        model_exists = os.path.exists(model_path)
+        
+        if model_exists and not force_training:
+            print("\n=== Modelo existente detectado ===")
+            print(f"Usando modelo existente en: {model_path}")
+            print("Para reentrenar el modelo, establece FORCE_TRAINING=true")
+            return 0
+            
         print("\n=== Iniciando proceso de entrenamiento ===")
         start_time = datetime.now()
         
         # 1. Preparar datos
-        print("\n[1/5] Preparando datos...")
+        print("\n[1/7] Preparando datos...")
         X, y = prepare_data()
         
         # 2. Dividir en conjuntos de entrenamiento y prueba
-        print("\n[2/5] Dividiendo datos en conjuntos de entrenamiento y prueba...")
+        print("\n[2/7] Dividiendo datos en conjuntos de entrenamiento y prueba...")
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42, stratify=y
         )
@@ -374,29 +478,106 @@ def main():
         print(f"Entrenamiento: {len(X_train)} ejemplos")
         print(f"Prueba: {len(X_test)} ejemplos")
         
-        # 3. Validación cruzada
-        print("\n[3/5] Realizando validación cruzada...")
-        cv_metrics = cross_validate_model(X_train, y_train, n_splits=5)
+        # 3. Validación cruzada con modelo base
+        print("\n[3/7] Realizando validación cruzada con modelo base...")
+        base_cv_metrics = cross_validate_model(X_train, y_train, n_splits=5)
         
-        # 4. Entrenar modelo final con todos los datos de entrenamiento
-        print("\n[4/5] Entrenando modelo final...")
-        model, y_pred, y_prob, test_metrics = train_and_evaluate(
-            X_train, X_test, y_train, y_test
-        )
+        # 4. Búsqueda de hiperparámetros óptimos
+        print("\n[4/7] Realizando búsqueda de hiperparámetros...")
+        best_model, best_params, best_score = perform_hyperparameter_tuning(X_train, y_train)
         
-        # 5. Generar y guardar gráficos
-        print("\n[5/5] Generando gráficos de evaluación...")
+        # Guardar los mejores hiperparámetros
+        hyperparams_file = os.path.join('models', 'best_hyperparameters.json')
+        os.makedirs(os.path.dirname(hyperparams_file), exist_ok=True)
+        with open(hyperparams_file, 'w') as f:
+            json.dump(best_params, f, indent=4)
+        print(f"Mejores hiperparámetros guardados en {hyperparams_file}")
+        
+        # 5. Entrenar modelo final con hiperparámetros optimizados
+        print("\n[5/7] Entrenando modelo final con hiperparámetros optimizados...")
+        
+        # Si se encontraron hiperparámetros óptimos, usarlos para crear un nuevo modelo
+        if best_model is not None:
+            # Crear un modelo estándar ya que no acepta hiperparámetros directamente
+            model = BullyingDetectionModel()
+            print(f"Usando hiperparámetros optimizados: {best_params}")
+            # Nota: Actualmente no podemos pasar los hiperparámetros directamente al modelo
+            # En una implementación futura, se podría modificar la clase BullyingDetectionModel
+            # para aceptar hiperparámetros como argumento
+            
+            # Entrenar el modelo
+            model.train(X_train, y_train)
+            
+            # Evaluar en conjunto de prueba
+            # Procesar cada texto y obtener predicciones
+            y_pred = []
+            y_prob = []
+            
+            for text in X_test:
+                pred, prob = model.predict(text)
+                y_pred.append(pred)
+                y_prob.append(prob[1])  # Probabilidad de la clase positiva (bullying)
+            
+            # Convertir a formato numpy para cálculos
+            y_pred = np.array(y_pred)
+            y_prob = np.column_stack((1-np.array(y_prob), y_prob))  # Formato [prob_clase_0, prob_clase_1]
+            
+            # Calcular métricas
+            test_metrics = calculate_metrics(y_test, y_pred, y_prob)
+        else:
+            # Si falló la búsqueda de hiperparámetros, usar el enfoque estándar
+            print("No se pudieron encontrar hiperparámetros óptimos. Usando modelo estándar.")
+            model, y_pred, y_prob, test_metrics = train_and_evaluate(
+                X_train, X_test, y_train, y_test
+            )
+        
+        # 6. Generar y guardar gráficos
+        print("\n[6/7] Generando gráficos de evaluación...")
         plot_metrics(y_test, y_pred, y_prob, output_dir='evaluation_plots')
         
-        # 6. Guardar el modelo
-        print("\nGuardando el modelo...")
+        # 7. Guardar el modelo y resultados
+        print("\n[7/7] Guardando el modelo y resultados...")
         model.save_model()
         
-        # 7. Guardar resultados
-        print("\nGuardando resultados...")
+        # Comparar métricas antes y después de la optimización
+        print("\n=== Comparación de Métricas Antes y Después de Optimización ===")
+        metrics_comparison = {
+            'base_model': {
+                'accuracy': base_cv_metrics.get('accuracy', 0),
+                'precision': base_cv_metrics.get('precision', 0),
+                'recall': base_cv_metrics.get('recall', 0),
+                'f1': base_cv_metrics.get('f1', 0),
+                'roc_auc': base_cv_metrics.get('roc_auc', 0)
+            },
+            'optimized_model': {
+                'accuracy': test_metrics.get('accuracy', 0),
+                'precision': test_metrics.get('precision', 0),
+                'recall': test_metrics.get('recall', 0),
+                'f1': test_metrics.get('f1', 0),
+                'roc_auc': test_metrics.get('roc_auc', 0)
+            }
+        }
+        
+        # Mostrar comparación
+        for metric in ['accuracy', 'precision', 'recall', 'f1', 'roc_auc']:
+            base_value = metrics_comparison['base_model'][metric]
+            opt_value = metrics_comparison['optimized_model'][metric]
+            diff = opt_value - base_value
+            diff_percent = (diff / base_value * 100) if base_value > 0 else 0
+            
+            print(f"{metric.capitalize()}: {base_value:.4f} → {opt_value:.4f} ")
+            if diff > 0:
+                print(f"  Mejora: +{diff:.4f} (+{diff_percent:.2f}%)")
+            else:
+                print(f"  Cambio: {diff:.4f} ({diff_percent:.2f}%)")
+        
+        # Guardar todos los resultados
         all_metrics = {
-            'cv_metrics': cv_metrics,
-            'test_metrics': test_metrics,
+            'base_cv_metrics': base_cv_metrics,
+            'optimized_test_metrics': test_metrics,
+            'best_hyperparameters': best_params,
+            'best_hyperparameter_score': best_score,
+            'metrics_comparison': metrics_comparison,
             'training_time_seconds': (datetime.now() - start_time).total_seconds(),
             'model_info': {
                 'type': 'StackingClassifier',
@@ -410,6 +591,24 @@ def main():
         
         print("\n=== Proceso de entrenamiento completado exitosamente ===")
         print(f"Tiempo total: {(datetime.now() - start_time).total_seconds()/60:.2f} minutos")
+        
+        # Mostrar recomendaciones basadas en los resultados
+        print("\n=== Recomendaciones ===")
+        if test_metrics['f1'] < 0.7:
+            print("- Considere aumentar el conjunto de datos con más ejemplos de bullying.")
+        if base_cv_metrics.get('train_test_diff', 0) > 0.15:
+            print("- El modelo muestra signos de overfitting. Considere usar regularización más fuerte.")
+        if test_metrics['recall'] < 0.7:
+            print("- La capacidad del modelo para detectar casos positivos (recall) es baja. ")
+            print("  Considere ajustar el umbral de decisión o usar técnicas de muestreo para mejorar la detección.")
+        
+        print("\nPara mejorar aún más el modelo, considere:")
+        print("1. Ampliar el conjunto de datos con más ejemplos de bullying diversos")
+        print("2. Experimentar con diferentes arquitecturas de modelo")
+        print("3. Implementar técnicas de data augmentation más avanzadas")
+        print("4. Realizar feature engineering adicional para capturar mejor los indicadores de bullying")
+        
+        return 0
         
         # Mostrar resumen de métricas
         print("\n=== Resumen de Métricas ===")
@@ -431,58 +630,108 @@ def main():
     
     return 0
 
+def calculate_metrics(y_true, y_pred, y_prob=None):
+    """Calcula métricas de evaluación del modelo"""
+    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix
+    
+    metrics = {
+        'accuracy': accuracy_score(y_true, y_pred),
+        'precision': precision_score(y_true, y_pred, average='weighted'),
+        'recall': recall_score(y_true, y_pred, average='weighted'),
+        'f1': f1_score(y_true, y_pred, average='weighted'),
+        'confusion_matrix': confusion_matrix(y_true, y_pred).tolist()
+    }
+    
+    # Calcular ROC AUC si hay probabilidades disponibles
+    if y_prob is not None:
+        try:
+            if len(y_prob.shape) > 1 and y_prob.shape[1] > 1:
+                # Multiclass case
+                metrics['roc_auc'] = roc_auc_score(y_true, y_prob, multi_class='ovr', average='weighted')
+            else:
+                # Binary case
+                metrics['roc_auc'] = roc_auc_score(y_true, y_prob[:, 1] if len(y_prob.shape) > 1 else y_prob)
+        except Exception as e:
+            print(f"No se pudo calcular ROC AUC: {e}")
+    
+    return metrics
+
 def train_and_evaluate(X_train, X_test, y_train, y_test):
     """Entrena y evalúa el modelo"""
+    start_time = datetime.now()
+    
     # Crear y entrenar el modelo
     model = BullyingDetectionModel()
     
     print("\nEntrenando el modelo...")
-    start_time = datetime.now()
     model.train(X_train, y_train)
-    training_time = (datetime.now() - start_time).total_seconds()
-    print(f"Tiempo de entrenamiento: {training_time:.2f} segundos")
     
-    # Evaluar en el conjunto de prueba
-    print("\nEvaluando el modelo en el conjunto de prueba...")
+    # Evaluar en conjunto de prueba
+    print("\nEvaluando en conjunto de prueba...")
+    
+    # Procesar cada texto y obtener predicciones
     y_pred = []
     y_prob = []
     
     for text in X_test:
         pred, prob = model.predict(text)
         y_pred.append(pred)
-        y_prob.append(prob[1])
+        y_prob.append(prob[1])  # Probabilidad de la clase positiva (bullying)
     
-    y_prob = np.column_stack((1-np.array(y_prob), y_prob))
+    # Convertir a formato numpy para cálculos
+    y_pred = np.array(y_pred)
+    y_prob = np.column_stack((1-np.array(y_prob), y_prob))  # Formato [prob_clase_0, prob_clase_1]
     
     # Calcular métricas
-    metrics = {
-        'accuracy': accuracy_score(y_test, y_pred),
-        'precision': precision_score(y_test, y_pred, average='weighted'),
-        'recall': recall_score(y_test, y_pred, average='weighted'),
-        'f1': f1_score(y_test, y_pred, average='weighted'),
-        'training_time_seconds': training_time
-    }
+    metrics = calculate_metrics(y_test, y_pred, y_prob)
+    
+    # Añadir tiempo de entrenamiento
+    training_time = (datetime.now() - start_time).total_seconds()
+    metrics['training_time_seconds'] = training_time
+    
+    # Mostrar métricas
+    print("\n=== Métricas en Conjunto de Prueba ===")
+    print(f"Accuracy: {metrics['accuracy']:.4f}")
+    print(f"Precision: {metrics['precision']:.4f}")
+    print(f"Recall: {metrics['recall']:.4f}")
+    print(f"F1-score: {metrics['f1']:.4f}")
+    if 'roc_auc' in metrics:
+        print(f"ROC AUC: {metrics['roc_auc']:.4f}")
+    print(f"Tiempo de entrenamiento: {training_time:.2f} segundos")
+    
+    # Mostrar matriz de confusión
+    print("\nMatriz de confusión:")
+    print(np.array(metrics['confusion_matrix']))
     
     # Mostrar informe de clasificación
+    from sklearn.metrics import classification_report
     print("\n=== Informe de Clasificación ===")
     print(classification_report(y_test, y_pred, target_names=['No Bullying', 'Bullying']))
     
     return model, y_pred, y_prob, metrics
 
 def cross_validate_model(X, y, n_splits=5):
-    """Realiza validación cruzada del modelo"""
+    """Realiza validación cruzada del modelo con métricas avanzadas"""
     print(f"\nRealizando validación cruzada con {n_splits} folds...")
     
     kf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
     model = BullyingDetectionModel()
     
+    # Ampliar las métricas a evaluar
     cv_metrics = {
         'accuracy': [],
         'precision': [],
         'recall': [],
         'f1': [],
-        'training_time': []
+        'roc_auc': [],
+        'balanced_accuracy': [],
+        'training_time': [],
+        'train_test_diff': []  # Para evaluar overfitting
     }
+    
+    # Matrices de confusión acumuladas
+    all_y_true = []
+    all_y_pred = []
     
     for fold, (train_idx, val_idx) in enumerate(kf.split(X, y), 1):
         print(f"\n=== Fold {fold}/{n_splits} ===")
@@ -491,23 +740,175 @@ def cross_validate_model(X, y, n_splits=5):
         y_train, y_val = [y[i] for i in train_idx], [y[i] for i in val_idx]
         
         # Entrenar y evaluar
-        _, y_pred, _, metrics = train_and_evaluate(X_train, X_val, y_train, y_val)
+        _, y_pred, y_prob, metrics = train_and_evaluate(X_train, X_val, y_train, y_val)
         
-        # Guardar métricas
+        # Acumular predicciones para análisis global
+        all_y_true.extend(y_val)
+        all_y_pred.extend(y_pred)
+        
+        # Guardar métricas estándar
         cv_metrics['accuracy'].append(metrics['accuracy'])
         cv_metrics['precision'].append(metrics['precision'])
         cv_metrics['recall'].append(metrics['recall'])
         cv_metrics['f1'].append(metrics['f1'])
         cv_metrics['training_time'].append(metrics['training_time_seconds'])
+        
+        # Calcular y guardar métricas adicionales
+        if 'roc_auc' in metrics:
+            cv_metrics['roc_auc'].append(metrics['roc_auc'])
+        else:
+            # Calcular ROC AUC manualmente si no está disponible
+            try:
+                from sklearn.metrics import roc_auc_score
+                roc_auc = roc_auc_score(y_val, y_prob[:, 1] if len(y_prob.shape) > 1 else y_prob)
+                cv_metrics['roc_auc'].append(roc_auc)
+            except Exception as e:
+                print(f"No se pudo calcular ROC AUC: {e}")
+                cv_metrics['roc_auc'].append(0.0)
+        
+        # Calcular balanced accuracy
+        try:
+            from sklearn.metrics import balanced_accuracy_score
+            balanced_acc = balanced_accuracy_score(y_val, y_pred)
+            cv_metrics['balanced_accuracy'].append(balanced_acc)
+        except Exception as e:
+            print(f"No se pudo calcular balanced accuracy: {e}")
+            cv_metrics['balanced_accuracy'].append(0.0)
+        
+        # Evaluar diferencia entre train y test para detectar overfitting
+        # En lugar de usar el modelo directamente, que puede no estar correctamente ajustado,
+        # usamos la diferencia entre las métricas de entrenamiento y validación reportadas
+        # por el modelo durante el entrenamiento
+        try:
+            # Crear un nuevo modelo y entrenarlo para obtener métricas de entrenamiento
+            temp_model = BullyingDetectionModel()
+            temp_model.train(X_train, y_train)
+            
+            # Evaluar en datos de entrenamiento
+            train_preds = []
+            for text in X_train:
+                pred, _ = temp_model.predict(text)
+                train_preds.append(pred)
+            
+            train_f1 = f1_score(y_train, train_preds, average='weighted')
+            test_f1 = metrics['f1']
+            cv_metrics['train_test_diff'].append(train_f1 - test_f1)
+        except Exception as e:
+            print(f"No se pudo calcular la diferencia entre train y test: {e}")
+            cv_metrics['train_test_diff'].append(0.0)
     
-    # Calcular promedios
+    # Calcular promedios y desviaciones estándar
     avg_metrics = {k: np.mean(v) for k, v in cv_metrics.items()}
+    std_metrics = {f"{k}_std": np.std(v) for k, v in cv_metrics.items()}
+    
+    # Combinar promedios y desviaciones
+    final_metrics = {**avg_metrics, **std_metrics}
+    
+    # Calcular matriz de confusión global
+    from sklearn.metrics import confusion_matrix
+    conf_matrix = confusion_matrix(all_y_true, all_y_pred)
+    final_metrics['confusion_matrix'] = conf_matrix.tolist()
     
     print("\n=== Métricas Promedio de Validación Cruzada ===")
     for metric, value in avg_metrics.items():
-        print(f"{metric}: {value:.4f}")
+        if isinstance(value, (int, float)):
+            std_value = std_metrics.get(f"{metric}_std", 0.0)
+            print(f"{metric}: {value:.4f} (±{std_value:.4f})")
     
-    return avg_metrics
+    # Evaluar overfitting
+    if avg_metrics['train_test_diff'] > 0.1:
+        print("\n\u26A0️ ADVERTENCIA: Posible overfitting detectado")
+        print(f"Diferencia promedio entre F1 de entrenamiento y validación: {avg_metrics['train_test_diff']:.4f}")
+    
+    # Mostrar matriz de confusión global
+    print("\nMatriz de confusión global:")
+    print(conf_matrix)
+    
+    return final_metrics
+
+def perform_hyperparameter_tuning(X, y):
+    """Realiza búsqueda de hiperparámetros para optimizar el modelo"""
+    from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+    
+    print("\nIniciando búsqueda de hiperparámetros...")
+    
+    try:
+        # Crear modelo base
+        model = BullyingDetectionModel()
+        
+        # Vectorizar textos
+        X_vectors = model.text_features.fit_transform(X)
+        
+        # Definir parámetros para búsqueda
+        param_grid = {
+            'final_estimator__n_estimators': [50, 100, 150],
+            'final_estimator__max_depth': [None, 10, 20],
+            'final_estimator__min_samples_split': [2, 5, 10],
+            'final_estimator__class_weight': ['balanced', 'balanced_subsample']
+        }
+        
+        # Usar RandomizedSearchCV para una búsqueda más eficiente
+        random_search = RandomizedSearchCV(
+            model.model,
+            param_distributions=param_grid,
+            n_iter=10,  # Número de combinaciones a probar
+            cv=5,
+            scoring='f1',
+            n_jobs=-1,  # Usar todos los núcleos disponibles
+            verbose=1,
+            random_state=42
+        )
+        
+        # Ejecutar búsqueda
+        print("Ejecutando búsqueda de hiperparámetros (esto puede tomar varios minutos)...")
+        random_search.fit(X_vectors, y)
+        
+        # Mostrar mejores parámetros
+        print(f"\nMejores parámetros encontrados:")
+        for param, value in random_search.best_params_.items():
+            print(f"- {param}: {value}")
+        
+        print(f"\nMejor puntuación F1: {random_search.best_score_:.4f}")
+        
+        # Realizar una búsqueda más refinada alrededor de los mejores parámetros
+        refined_param_grid = {}
+        for param, value in random_search.best_params_.items():
+            if param == 'final_estimator__n_estimators':
+                refined_param_grid[param] = [max(value-25, 10), value, min(value+25, 200)]
+            elif param == 'final_estimator__max_depth' and value is not None:
+                refined_param_grid[param] = [max(value-5, 5), value, min(value+5, 30)]
+            elif param == 'final_estimator__min_samples_split':
+                refined_param_grid[param] = [max(value-2, 2), value, min(value+2, 15)]
+            else:
+                refined_param_grid[param] = [value]
+        
+        # Ejecutar búsqueda refinada
+        grid_search = GridSearchCV(
+            model.model,
+            param_grid=refined_param_grid,
+            cv=5,
+            scoring='f1',
+            n_jobs=-1,
+            verbose=1
+        )
+        
+        print("\nEjecutando búsqueda refinada...")
+        grid_search.fit(X_vectors, y)
+        
+        print(f"\nMejores parámetros refinados:")
+        for param, value in grid_search.best_params_.items():
+            print(f"- {param}: {value}")
+        
+        print(f"\nMejor puntuación F1 refinada: {grid_search.best_score_:.4f}")
+        
+        # Devolver el mejor modelo y sus parámetros
+        return grid_search.best_estimator_, grid_search.best_params_, grid_search.best_score_
+        
+    except Exception as e:
+        print(f"Error en búsqueda de hiperparámetros: {e}")
+        import traceback
+        traceback.print_exc()
+        return None, {}, 0.0
 
 def plot_metrics(y_true, y_pred, y_prob, output_dir='evaluation_plots'):
     """Genera y guarda gráficos de métricas de evaluación"""

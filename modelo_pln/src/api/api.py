@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from bot.chatbot import Chatbot
+from bot.enhanced_chatbot import EnhancedChatbot
 from database.db_utils import Database
 import os
 import logging
@@ -51,7 +51,8 @@ app.add_middleware(
 )
 
 # Inicializar el chatbot
-chatbot = Chatbot()
+# Initialize the enhanced chatbot with the database connection and Mistral model
+chatbot = EnhancedChatbot(db_connection=db, model_name="mistral:7b-instruct")
 
 
 # Modelos Pydantic
@@ -99,19 +100,57 @@ async def log_requests(request: Request, call_next):
 # Endpoint de health check
 # Keep the root health check at the app level
 
-@app.get("/")
-async def health_check():
+@app.get("/", tags=["health"])
+async def root_health_check():
     """
     Endpoint para verificar el estado de la API
     """
-    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+    return {"status": "ok", "message": "API is running"}
 
-@app.get("/health")
+@app.get("/health", tags=["health"])
 async def health_check():
     """
-    Endpoint para verificar el estado de la API
+    Endpoint para verificar el estado de salud de la API
     """
-    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+    # Verificar conexión a la base de datos
+    db_status = "ok"
+    try:
+        db.test_connection()
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+    
+    # Verificar disponibilidad de Ollama si está configurado
+    ollama_status = "not_configured"
+    ollama_host = os.getenv('OLLAMA_HOST')
+    ollama_port = os.getenv('OLLAMA_PORT')
+    
+    if ollama_host and ollama_port:
+        try:
+            import requests
+            response = requests.get(f"http://{ollama_host}:{ollama_port}/", timeout=2)
+            if response.status_code == 200:
+                ollama_status = "ok"
+            else:
+                ollama_status = f"error: status code {response.status_code}"
+        except Exception as e:
+            ollama_status = f"error: {str(e)}"
+    
+    # Verificar disponibilidad del modelo de detección de bullying
+    model_status = "not_loaded"
+    model_path = os.getenv('MODEL_PATH')
+    if model_path and os.path.exists(model_path):
+        model_status = "ok"
+    
+    return {
+        "status": "ok" if db_status == "ok" else "warning",
+        "timestamp": datetime.now().isoformat(),
+        "components": {
+            "api": "ok",
+            "database": db_status,
+            "ollama": ollama_status,
+            "bullying_model": model_status
+        }
+    }
 
 @api_router.post("/user", response_model=UserResponse, tags=["users"])
 async def create_user(request: UserRequest):
@@ -234,8 +273,17 @@ async def process_message(request: MessageRequest):
                 traceback.print_exc()
                 raise HTTPException(status_code=500, detail=f"Error creating user or conversation: {str(e)}")
             
-            # Process the message with the chatbot and get the full analysis
-            response, analysis = chatbot.process_message(request.user_id, request.message)
+            # Get user information if available
+            user_info = None
+            try:
+                cursor = db.connection.cursor(dictionary=True)
+                cursor.execute("SELECT id, age, neighborhood, school FROM anonymous_users WHERE id = %s", (request.user_id,))
+                user_info = cursor.fetchone()
+            except Exception as e:
+                print(f"Error fetching user info: {str(e)}")
+                
+            # Process the message with the enhanced chatbot and get the full analysis
+            response, analysis = chatbot.process_message(request.user_id, request.message, user_info=user_info)
             print("Message processed successfully")
             logger.debug(f"Response: {response}")
             logger.debug(f"Analysis: {analysis}")

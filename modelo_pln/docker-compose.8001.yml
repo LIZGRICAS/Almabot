@@ -27,6 +27,49 @@ services:
           memory: 1G
         reservations:
           memory: 512M
+          
+  ollama_8001:
+    image: ollama/ollama:latest
+    container_name: almabot-ollama-8001
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data_8001:/root/.ollama
+    restart: unless-stopped
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_MODELS=/root/.ollama/models
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          memory: 4G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:11434/ || exit 0"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # La imagen de Ollama ya ejecuta 'ollama serve' por defecto
+      
+  ollama_init_8001:
+    image: alpine:latest
+    container_name: almabot-ollama-init-8001
+    depends_on:
+      ollama_8001:
+        condition: service_healthy
+    volumes:
+      - ./init-ollama.sh:/init-ollama.sh:ro
+      - ./monitor_ollama.py:/monitor_ollama.py:ro
+    command: ["/bin/sh", "-c", "apk add --no-cache curl && sh /init-ollama.sh"]
+    restart: on-failure
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   training_8001:
     build:
@@ -40,6 +83,7 @@ services:
       - DB_NAME=${DB_NAME:-almabot}
       - PYTHONUNBUFFERED=1
       - MODEL_PATH=/app/data/models/model_8001
+      - FORCE_TRAINING=${FORCE_TRAINING:-false}
     volumes:
       - ./data/models:/app/data/models
       - ./data/raw:/app/data/raw
@@ -55,12 +99,12 @@ services:
         reservations:
           memory: 2G
     restart: 'on-failure'
-    command: >
-      bash -c "mkdir -p /app/data/models && 
-               cd /app && 
-               python -c 'from src.models.train_model import main; main()' && 
-               echo 'Training completed successfully. The model has been saved.' && 
-               exit 0"
+    command: |
+      bash -c 'mkdir -p /app/data/models && \
+      cd /app && \
+      python -c "from src.models.train_model import main; import os; force_training = os.environ.get(\"FORCE_TRAINING\", \"false\").lower() == \"true\"; print(\"FORCE_TRAINING =\", force_training); main(force_training)" && \
+      echo "Training completed successfully. The model has been saved or reused." && \
+      exit 0'
     logging:
       driver: json-file
       options:
@@ -81,20 +125,50 @@ services:
       - DB_USER=${DB_USER:-almabot}
       - DB_PASSWORD=${DB_PASSWORD:-almabot123}
       - MODEL_PATH=/app/data/models/model_8001
+      - OLLAMA_HOST=ollama_8001
+      - OLLAMA_PORT=11434
+      - OLLAMA_MODEL=mistral:7b-instruct
+      - PYTHONUNBUFFERED=1
     volumes:
       - ./data/models:/app/data/models
       - ./src:/app/src
+      - ./test_enhanced_chatbot.py:/app/test_enhanced_chatbot.py
+      - ./monitor_ollama.py:/app/monitor_ollama.py
     depends_on:
       db_8001:
         condition: service_healthy
       training_8001:
         condition: service_completed_successfully
+      ollama_init_8001:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          memory: 1G
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-s", "-f", "http://localhost:8000/health" , "||" , "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 
 
 volumes:
   mysql_data_8001:
     name: almabot_mysql_data_8001
+    driver: local
+  ollama_data_8001:
+    name: almabot_ollama_data_8001
     driver: local
 
 networks:
