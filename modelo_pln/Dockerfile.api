@@ -42,6 +42,7 @@ ENV PYTHONPATH=/app:/app/src \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     default-mysql-client \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Instalar dependencias del builder

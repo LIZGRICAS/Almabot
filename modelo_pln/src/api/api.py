@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from bot.chatbot import Chatbot
+from bot.enhanced_chatbot import EnhancedChatbot
 from database.db_utils import Database
 import os
 import logging
@@ -51,7 +51,8 @@ app.add_middleware(
 )
 
 # Inicializar el chatbot
-chatbot = Chatbot()
+# Initialize the enhanced chatbot with the database connection and Mistral model
+chatbot = EnhancedChatbot(db_connection=db, model_name="mistral:7b-instruct")
 
 
 # Modelos Pydantic
@@ -234,8 +235,17 @@ async def process_message(request: MessageRequest):
                 traceback.print_exc()
                 raise HTTPException(status_code=500, detail=f"Error creating user or conversation: {str(e)}")
             
-            # Process the message with the chatbot and get the full analysis
-            response, analysis = chatbot.process_message(request.user_id, request.message)
+            # Get user information if available
+            user_info = None
+            try:
+                cursor = db.connection.cursor(dictionary=True)
+                cursor.execute("SELECT id, age, neighborhood, school FROM anonymous_users WHERE id = %s", (request.user_id,))
+                user_info = cursor.fetchone()
+            except Exception as e:
+                print(f"Error fetching user info: {str(e)}")
+                
+            # Process the message with the enhanced chatbot and get the full analysis
+            response, analysis = chatbot.process_message(request.user_id, request.message, user_info=user_info)
             print("Message processed successfully")
             logger.debug(f"Response: {response}")
             logger.debug(f"Analysis: {analysis}")

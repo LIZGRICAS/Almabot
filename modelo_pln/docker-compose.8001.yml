@@ -27,6 +27,33 @@ services:
           memory: 1G
         reservations:
           memory: 512M
+          
+  ollama_8001:
+    image: ollama/ollama:latest
+    container_name: almabot-ollama-8001
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data_8001:/root/.ollama
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          memory: 4G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Inicializa el modelo Mistral 7B al iniciar el contenedor
+    command: >
+      sh -c "ollama serve & sleep 10 && 
+             ollama pull mistral:7b-instruct && 
+             tail -f /dev/null"
 
   training_8001:
     build:
@@ -81,6 +108,9 @@ services:
       - DB_USER=${DB_USER:-almabot}
       - DB_PASSWORD=${DB_PASSWORD:-almabot123}
       - MODEL_PATH=/app/data/models/model_8001
+      - OLLAMA_HOST=ollama_8001
+      - OLLAMA_PORT=11434
+      - OLLAMA_MODEL=mistral:7b-instruct
     volumes:
       - ./data/models:/app/data/models
       - ./src:/app/src
@@ -89,12 +119,17 @@ services:
         condition: service_healthy
       training_8001:
         condition: service_completed_successfully
+      ollama_8001:
+        condition: service_healthy
 
 
 
 volumes:
   mysql_data_8001:
     name: almabot_mysql_data_8001
+    driver: local
+  ollama_data_8001:
+    name: almabot_ollama_data_8001
     driver: local
 
 networks:
