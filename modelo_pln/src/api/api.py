@@ -243,25 +243,54 @@ async def process_message(request: MessageRequest):
             
             # Create emotional state if available
             if 'emotion' in analysis:
+                # Map emotion types to valid database ENUM values
+                emotion_type_map = {
+                    'happiness': 'happy',
+                    'sadness': 'sad',
+                    'anger': 'angry',
+                    'fear': 'fear',
+                    'anxiety': 'anxiety',
+                    'shame': 'shame',
+                    'hopelessness': 'hopelessness',
+                    'distress': 'distress',
+                    'neutral': 'neutral'
+                }
+                
+                # Get the emotion type from analysis and map it to a valid value
+                raw_emotion_type = analysis['emotion']['type'].lower()
+                # Use the mapped emotion type or default to 'neutral' if not found
+                emotion_type = emotion_type_map.get(raw_emotion_type, 'neutral')
+                
+                # Create the emotional state with the valid emotion type
                 db.create_emotional_state(
                     message_id=message_id,
-                    emotion_type=analysis['emotion']['type'],
+                    emotion_type=emotion_type,
                     intensity=analysis['emotion']['intensity'],
                     created_by=request.created_by
                 )
-                print(f"Emotional state created: {analysis['emotion']['type']}")
+                print(f"Emotional state created: {emotion_type} (mapped from {raw_emotion_type})")
             
             # Create risk assessment if available
             if 'risk' in analysis:
-                # Ensure risk_type is one of the allowed values: 'bullying', 'suicide', 'abuse', 'other'
-                risk_type = analysis['risk']['type'].lower()
-                if risk_type not in ['bullying', 'suicide', 'abuse', 'other']:
-                    risk_type = 'other'  # Default to 'other' if not a valid type
+                # Ensure risk_type is one of the allowed values
+                risk_type_map = {
+                    'bullying': 'bullying',
+                    'suicide': 'suicide',
+                    'abuse': 'abuse',
+                    'emotional_distress': 'emotional_distress',
+                    'none': 'none',
+                    'other': 'other'
+                }
+                
+                raw_risk_type = analysis['risk']['type'].lower()
+                risk_type = risk_type_map.get(raw_risk_type, 'other')  # Default to 'other' if not a valid type
                 
                 # Ensure risk_level is one of the allowed values: 'low', 'medium', 'high'
                 risk_level = analysis['risk']['level'].lower()
                 if risk_level not in ['low', 'medium', 'high']:
                     risk_level = 'low'  # Default to 'low' if not a valid level
+                
+                print(f"Risk assessment being created: {risk_level} - {risk_type} (mapped from {raw_risk_type})")
                 
                 db.create_risk_assessment(
                     message_id=message_id,
@@ -269,7 +298,7 @@ async def process_message(request: MessageRequest):
                     risk_type=risk_type,
                     created_by=request.created_by
                 )
-                logger.warning(f"Risk assessment created: {risk_level} - {risk_type}")
+                logger.warning(f"Risk assessment created: {risk_level} - {risk_type} (mapped from {raw_risk_type})")
         except Exception as e:
             print(f"Error during database operations: {str(e)}")
             import traceback

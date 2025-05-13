@@ -1,7 +1,9 @@
 services:
   db_8001:
     image: mysql:8.0
-    container_name: almabot-db-8001
+    container_name: almabot-db-8001-new
+    networks:
+      - almabot_net_8001
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-almabot_root}
       MYSQL_DATABASE: ${DB_NAME:-almabot}
@@ -19,7 +21,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -32,7 +33,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.train
-    container_name: almabot-training-8001
+    container_name: almabot-training-8001-new
+    networks:
+      - almabot_net_8001
     environment:
       - DB_HOST=db_8001
       - DB_USER=${DB_USER:-almabot}
@@ -71,7 +74,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
-    container_name: almabot-api-8001
+    container_name: almabot-api-8001-new
+    networks:
+      - almabot_net_8001
     ports:
       - "8001:8000"
     environment:
@@ -90,13 +95,12 @@ services:
       training_8001:
         condition: service_completed_successfully
 
-
-
 volumes:
   mysql_data_8001:
     name: almabot_mysql_data_8001
     driver: local
 
 networks:
-  almabot-network-8001:
-    driver: bridge
+  almabot_net_8001:
+    name: almabot_net_8001
+    external: true

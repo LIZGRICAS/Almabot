@@ -82,9 +82,15 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE TABLE IF NOT EXISTS emotional_states (
     id VARCHAR(36) PRIMARY KEY,
     message_id VARCHAR(36),
-    emotion_type ENUM('happy', 'sad', 'angry', 'fear', 'neutral') NOT NULL,
+    emotion_type ENUM('happy', 'sad', 'angry', 'fear', 'neutral', 'anxiety', 'shame', 'hopelessness', 'distress', 'happiness') NOT NULL,
     intensity FLOAT,
     detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(36),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by VARCHAR(36),
+    deleted_at TIMESTAMP NULL,
+    deleted_by VARCHAR(36),
     FOREIGN KEY (message_id) REFERENCES messages(id)
 );
 
@@ -93,10 +99,16 @@ CREATE TABLE IF NOT EXISTS risk_assessment (
     id VARCHAR(36) PRIMARY KEY,
     message_id VARCHAR(36),
     risk_level ENUM('low', 'medium', 'high') NOT NULL,
-    risk_type ENUM('bullying', 'suicide', 'abuse', 'other') NOT NULL,
+    risk_type ENUM('bullying', 'suicide', 'abuse', 'emotional_distress', 'none', 'other') NOT NULL,
     requires_attention BOOLEAN DEFAULT FALSE,
     reviewed_by VARCHAR(50),
     reviewed_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(36),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by VARCHAR(36),
+    deleted_at TIMESTAMP NULL,
+    deleted_by VARCHAR(36),
     FOREIGN KEY (message_id) REFERENCES messages(id),
     FOREIGN KEY (reviewed_by) REFERENCES users(username)
 );
