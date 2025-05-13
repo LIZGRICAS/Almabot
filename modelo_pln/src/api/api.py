@@ -65,6 +65,11 @@ class ConversationRequest(BaseModel):
     metadata: Optional[Dict] = None
     created_by: Optional[str] = None
 
+class ConversationEndRequest(BaseModel):
+    conversation_id: str
+    metadata: Optional[Dict] = None
+    created_by: Optional[str] = None
+
 # Middleware para log de solicitudes
 # Keep the middleware at the app level
 @app.middleware("http")
@@ -134,33 +139,97 @@ async def create_user(request: UserRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to create user: {str(e)}")
 
-# @api_router.post("/conversation", response_model=Dict, tags=["conversations"])
-# async def create_conversation(request: ConversationRequest):
-#     """
-#     Create a new conversation and return the conversation_id
-#     """
-#     try:
-#         print(f"Creating conversation for user: {request.user_id}")
+@api_router.post("/register", response_model=UserResponse, tags=["users"])
+async def register_user(request: UserRequest):
+    """
+    Register a new anonymous user as shown in the 01_registro_usuario.puml diagram
+    """
+    try:
+        print("Registering new anonymous user")
+        print(f"Request data: {request.dict()}")
         
-#         # Connect to database
-#         if not db.connect():
-#             print("Database connection failed")
-#             raise HTTPException(status_code=500, detail="Database connection failed")
+        # Connect to database
+        if not db.connect():
+            print("Database connection failed")
+            raise HTTPException(status_code=500, detail="Database connection failed")
         
-#         # Create conversation
-#         conversation_id = db.create_conversation(
-#             request.user_id,
-#             request.metadata or {},
-#             created_by=request.created_by
-#         )
-#         print(f"Conversation created with ID: {conversation_id}")
+        # Create user
+        user_id = db.create_anonymous_user(
+            age=request.age,
+            neighborhood=request.neighborhood,
+            school=request.school,
+            created_by=request.created_by
+        )
+        print(f"User registered with ID: {user_id}")
         
-#         return {"conversation_id": conversation_id}
-#     except Exception as e:
-#         print(f"Error creating conversation: {str(e)}")
-#         import traceback
-#         traceback.print_exc()
-#         raise HTTPException(status_code=500, detail=str(e))
+        return UserResponse(user_id=user_id, created_at=datetime.now())
+    except Exception as e:
+        print(f"Error registering user: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to register user: {str(e)}")
+
+@api_router.post("/conversation/start", response_model=Dict, tags=["conversations"])
+async def start_conversation(request: ConversationRequest):
+    """
+    Start a new conversation as shown in the 02_inicio_conversacion.puml diagram
+    """
+    try:
+        print(f"Starting conversation for user: {request.user_id}")
+        
+        # Connect to database
+        if not db.connect():
+            print("Database connection failed")
+            raise HTTPException(status_code=500, detail="Database connection failed")
+        
+        # Create conversation
+        conversation_id = db.create_conversation(
+            request.user_id,
+            request.metadata or {},
+            created_by=request.created_by
+        )
+        print(f"Conversation started with ID: {conversation_id}")
+        
+        return {"conversation_id": conversation_id, "status": "started"}
+    except Exception as e:
+        print(f"Error starting conversation: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/conversation/end", response_model=Dict, tags=["conversations"])
+async def end_conversation(request: ConversationEndRequest):
+    """
+    End an active conversation as shown in the 04_cierre_conversacion.puml diagram
+    """
+    try:
+        print(f"Ending conversation: {request.conversation_id}")
+        
+        # Connect to database
+        if not db.connect():
+            print("Database connection failed")
+            raise HTTPException(status_code=500, detail="Database connection failed")
+        
+        # Mark conversation as ended
+        db.end_conversation(request.conversation_id)
+        print(f"Conversation ended: {request.conversation_id}")
+        
+        # Generate conversation summary
+        summary = db.get_conversation_summary(request.conversation_id)
+        
+        return {
+            "status": "conversation_ended",
+            "summary": {
+                "duration_minutes": summary.get("duration_minutes", 0),
+                "message_count": summary.get("message_count", 0),
+                "risk_assessment": summary.get("risk_level", "low")
+            }
+        }
+    except Exception as e:
+        print(f"Error ending conversation: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.post("/chat-message", response_model=MessageResponse, tags=["chat"])
 async def process_message(request: MessageRequest):

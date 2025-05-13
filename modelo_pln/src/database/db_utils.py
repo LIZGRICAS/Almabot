@@ -361,3 +361,104 @@ class Database:
     def close(self):
         if self.connection:
             self.connection.close()
+            
+    def end_conversation(self, conversation_id: str, created_by: str = None) -> bool:
+        """Mark a conversation as ended with audit logging"""
+        try:
+            if not self.connection:
+                self.connect()
+            
+            cursor = self.connection.cursor(dictionary=True)
+            
+            # Get current conversation data for audit
+            cursor.execute("SELECT * FROM conversations WHERE id = %s", (conversation_id,))
+            old_data = cursor.fetchone()
+            
+            if not old_data:
+                print(f"Conversation not found: {conversation_id}")
+                return False
+            
+            # Update conversation
+            sql = """
+                UPDATE conversations 
+                SET end_time = NOW(), is_active = FALSE, updated_by = %s, updated_at = NOW()
+                WHERE id = %s
+            """
+            cursor.execute(sql, (created_by or self.system_user_id, conversation_id))
+            
+            # Log audit
+            self.log_audit(
+                table_name='conversations',
+                record_id=conversation_id,
+                action='UPDATE',
+                old_data={'is_active': True},
+                new_data={'is_active': False, 'end_time': datetime.now().isoformat()},
+                user_id=created_by
+            )
+            
+            self.connection.commit()
+            return True
+        except Error as e:
+            print(f"Error ending conversation: {e}")
+            raise
+    
+    def get_conversation_summary(self, conversation_id: str) -> Dict[str, Any]:
+        """Generate a summary of a conversation"""
+        try:
+            if not self.connection:
+                self.connect()
+            
+            cursor = self.connection.cursor(dictionary=True)
+            
+            # Get conversation details
+            cursor.execute("""
+                SELECT 
+                    id, user_id, start_time, end_time,
+                    TIMESTAMPDIFF(MINUTE, start_time, COALESCE(end_time, NOW())) as duration_minutes
+                FROM conversations 
+                WHERE id = %s
+            """, (conversation_id,))
+            
+            conversation = cursor.fetchone()
+            if not conversation:
+                return {
+                    "duration_minutes": 0,
+                    "message_count": 0,
+                    "risk_level": "unknown"
+                }
+            
+            # Count messages
+            cursor.execute("""
+                SELECT COUNT(*) as message_count
+                FROM messages
+                WHERE conversation_id = %s
+            """, (conversation_id,))
+            
+            message_count = cursor.fetchone()["message_count"]
+            
+            # Get highest risk level
+            cursor.execute("""
+                SELECT risk_level, COUNT(*) as count
+                FROM risk_assessment ra
+                JOIN messages m ON ra.message_id = m.id
+                WHERE m.conversation_id = %s
+                GROUP BY risk_level
+                ORDER BY FIELD(risk_level, 'high', 'medium', 'low') ASC
+                LIMIT 1
+            """, (conversation_id,))
+            
+            risk_result = cursor.fetchone()
+            risk_level = risk_result["risk_level"] if risk_result else "low"
+            
+            return {
+                "duration_minutes": conversation["duration_minutes"],
+                "message_count": message_count,
+                "risk_level": risk_level
+            }
+        except Error as e:
+            print(f"Error getting conversation summary: {e}")
+            return {
+                "duration_minutes": 0,
+                "message_count": 0,
+                "risk_level": "error"
+            }

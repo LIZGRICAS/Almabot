@@ -215,22 +215,59 @@ class Chatbot:
                     'context': {'hypothetical': False, 'context_words': []}
                 }
             
-            # If bullying indicators are detected, check for specific contexts
-            if "bullying" in detected_emotions:
-                print(f"Detected bullying indicators in: '{message_lower}'")
-                # Check for specific bullying contexts
-                if "compañeros" in message_lower or "escuela" in message_lower or "colegio" in message_lower or "clase" in message_lower:
-                    # This is likely school bullying
-                    prediction = 1
-                    confidence = 0.85
-                    if "molestan" in message_lower or "burlan" in message_lower:
-                        bullying_type = "verbal"
-                    elif "pegan" in message_lower or "empujan" in message_lower or "golpean" in message_lower:
-                        bullying_type = "físico"
-                    elif "ignoran" in message_lower or "excluyen" in message_lower or "solo" in message_lower or "sola" in message_lower:
-                        bullying_type = "social"
-                    else:
-                        bullying_type = "psicológico"
+            # Check for bullying indicators directly in the message using a more comprehensive approach
+            bullying_indicators = {
+                # Verbal bullying
+                "verbal": ["molestan", "burlan", "insultan", "gritan", "dicen cosas", "hablan mal", 
+                          "rumores", "apodos", "burlas", "insultos", "ofenden", "humillan", "amenazan",
+                          "se ríen", "se burlan", "me llaman", "me dicen"],
+                # Physical bullying
+                "físico": ["pegan", "empujan", "golpean", "patean", "lastiman", "agreden", "tiran", 
+                          "rompen", "quitan", "esconden", "roban", "dañan", "me pegan", "me empujan",
+                          "me golpean", "me patean", "me lastiman"],
+                # Social bullying
+                "social": ["ignoran", "excluyen", "rechazan", "aíslan", "no me juntan", "no me invitan", 
+                          "solo", "sola", "no me hablan", "nadie juega", "dejan fuera", "no me incluyen",
+                          "me ignoran", "me excluyen", "me rechazan"],
+                # Cyberbullying
+                "cibernético": ["mensajes", "internet", "redes", "fotos", "videos", "whatsapp", 
+                               "instagram", "facebook", "tiktok", "publican", "comparten", "mandan"]
+            }
+            
+            # School context indicators
+            school_context = ["escuela", "colegio", "clase", "recreo", "compañeros", "compañeras", 
+                             "maestro", "maestra", "profesor", "profesora", "alumno", "alumna", 
+                             "salón", "patio", "baño", "pasillo", "aula", "curso", "grado", "año escolar"]
+            
+            # Detect bullying type based on indicators in the message
+            detected_bullying_type = None
+            for btype, indicators in bullying_indicators.items():
+                if any(indicator in message_lower for indicator in indicators):
+                    detected_bullying_type = btype
+                    print(f"Detected {btype} bullying indicators in: '{message_lower}'")
+                    break
+                    
+            # Check for school context
+            is_school_context = any(context in message_lower for context in school_context)
+            
+            # If both bullying indicators and school context are detected
+            if detected_bullying_type and is_school_context:
+                print(f"Detected school bullying context in: '{message_lower}'")
+                prediction = 1
+                confidence = 0.85
+                bullying_type = detected_bullying_type
+            # If only bullying indicators are detected without clear school context
+            elif detected_bullying_type:
+                print(f"Detected bullying indicators without clear school context in: '{message_lower}'")
+                prediction = 1
+                confidence = 0.75
+                bullying_type = detected_bullying_type
+            # If "bullying" emotion was detected but no specific indicators
+            elif "bullying" in detected_emotions:
+                print(f"Detected bullying emotion without specific indicators in: '{message_lower}'")
+                prediction = 1
+                confidence = 0.6
+                bullying_type = "psicológico"
             
             # Check if the message is about a hypothetical situation rather than a real experience
             context_indicators = {
@@ -333,23 +370,58 @@ class Chatbot:
                     emotion_type = "sadness"
                     emotion_intensity = 0.5
             
-            # Determine risk level and type
+            # Enhanced risk assessment logic with more detailed risk types
             risk_level = "low"
             risk_type = "none"
             
+            # High-risk indicators (words suggesting immediate danger or severe situations)
+            high_risk_words = [
+                "suicid", "matar", "morir", "muerte", "no quiero vivir", "acabar con todo",
+                "golpear", "pegar", "lastimar", "herir", "sangre", "herida", "hospital",
+                "arma", "cuchillo", "pistola", "amenaza", "amenazar", "miedo", "terror",
+                "abuso", "abusar", "violencia", "violento", "violenta", "agresión", "agresor"
+            ]
+            
+            # Medium-risk indicators (words suggesting ongoing issues)
+            medium_risk_words = [
+                "todos los días", "siempre", "constantemente", "cada día", "no para", 
+                "no puedo más", "cansado", "cansada", "harto", "harta", "desesperado", "desesperada",
+                "triste", "deprimido", "deprimida", "solo", "sola", "nadie me ayuda",
+                "no tengo amigos", "no tengo amigas", "no le importo a nadie"
+            ]
+            
+            # Check for high-risk indicators
+            has_high_risk = any(word in message_lower for word in high_risk_words)
+            has_medium_risk = any(word in message_lower for word in medium_risk_words)
+            
+            # Determine risk based on bullying prediction, risk words, and sentiment
             if prediction == 1:
-                if confidence > 0.8:
+                if has_high_risk or confidence > 0.85:
                     risk_level = "high"
-                    risk_type = "bullying"
-                elif confidence > 0.6:
+                    risk_type = "bullying_severe"
+                elif has_medium_risk or confidence > 0.7:
                     risk_level = "medium"
-                    risk_type = "bullying"
+                    risk_type = "bullying_ongoing"
                 else:
                     risk_level = "low"
-                    risk_type = "potential_bullying"
-            elif sentiment == "negative" and sentiment_score < -0.5:
+                    risk_type = "bullying_potential"
+                    
+                # Adjust risk level based on bullying type
+                if bullying_type == "físico" and risk_level != "high":
+                    risk_level = "high"  # Physical bullying is always high risk
+                    risk_type = "bullying_physical"
+                elif bullying_type == "cibernético" and risk_level == "low":
+                    risk_level = "medium"  # Cyberbullying is at least medium risk
+                    risk_type = "bullying_cyber"
+            elif has_high_risk:
+                risk_level = "medium"
+                risk_type = "emotional_distress_severe"
+            elif has_medium_risk or (sentiment == "negative" and sentiment_score < -0.6):
                 risk_level = "low"
                 risk_type = "emotional_distress"
+            elif sentiment == "negative" and sentiment_score < -0.4:
+                risk_level = "low"
+                risk_type = "negative_emotion"
             
             # Generate a response based on the prediction
             response = self._generate_response(prediction, confidence, bullying_type)
@@ -512,14 +584,31 @@ class Chatbot:
         return random.choice(loneliness_responses)
         
     def _generate_response(self, prediction, confidence, bullying_type):
+        # Get the risk level from the analysis
+        risk_level = self._get_risk_level(prediction, confidence, bullying_type)
+        
         # Emergency resources (only show for high risk situations)
         emergency_resources = (
-            "\n\n📞 Recursos de ayuda:\n"
+            "\n\n📞 Recursos de ayuda inmediata:\n"
             "- Línea de ayuda contra el bullying: 123-456-789 (24/7, anónimo y gratuito)\n"
             "- Línea de emergencia: 911\n"
             "- Línea de la vida: 01 800 911 2000 (Atención psicológica)\n"
             "- Chat de ayuda: www.chatayuda.org.mx"
         )
+        
+        # Support resources (show for medium risk situations)
+        support_resources = (
+            "\n\n🌟 Recursos de apoyo:\n"
+            "- Línea de ayuda contra el bullying: 123-456-789\n"
+            "- Sitio web con información: www.noalbullying.org.mx"
+        )
+        
+        # Determine which resources to show based on risk level
+        resources = ""
+        if risk_level == "high":
+            resources = emergency_resources
+        elif risk_level == "medium":
+            resources = support_resources
         
         # If not bullying, provide a general supportive response
         if prediction == 0 or confidence < 0.5:
@@ -532,15 +621,22 @@ class Chatbot:
             ]
             return random.choice(general_responses)
         
-        # For bullying situations, provide targeted responses based on type
+        # For bullying situations, provide targeted responses based on type and risk level
         if bullying_type == "verbal":
-            verbal_responses = [
-                f"Las palabras pueden doler profundamente, y entiendo lo difícil que debe ser escuchar cosas hirientes. Quiero que sepas que lo que dicen de ti no define quién eres realmente. Tú vales mucho más que esas palabras. ¿Te gustaría compartir conmigo lo que te están diciendo? A veces expresarlo puede ayudar a procesarlo.\n\n💬 Cómo manejar el acoso verbal:\n- No respondas con más insultos\n- Practica respuestas asertivas\n- Busca apoyo en amigos o adultos de confianza\n- Recuerda que las palabras ofensivas dicen más de quien las dice que de ti{emergency_resources}",
-                f"Entiendo que las palabras pueden causar un dolor real, y lamento que estés pasando por esto. Es importante que sepas que esos comentarios no reflejan quién eres tú. ¿Has podido hablar con alguien de confianza sobre esta situación?\n\n💬 Estrategias frente al acoso verbal:\n- Mantén la calma y no respondas de la misma manera\n- Aléjate de la situación si es posible\n- Documenta los incidentes (fecha, hora, qué se dijo)\n- Habla con un adulto de confianza sobre lo que está pasando{emergency_resources}"
-            ]
+            if risk_level == "high":
+                verbal_responses = [
+                    f"Lo que me cuentas sobre esas palabras hirientes es muy serio. Nadie merece ser tratado así. Es importante que sepas que esto no es tu culpa y que mereces respeto. ¿Has hablado con algún adulto de confianza sobre esta situación?\n\n💬 Pasos importantes ahora:\n- Habla con un adulto de confianza hoy mismo\n- No respondas con más insultos\n- Mantente cerca de amigos que te apoyen\n- Recuerda que estas palabras no definen quién eres{resources}",
+                    f"Entiendo que estas palabras te están afectando profundamente, y quiero que sepas que esto es acoso verbal y no es aceptable. Tu bienestar es lo más importante ahora. ¿Hay algún adulto en quien confíes para contarle lo que está pasando?\n\n💬 Acciones inmediatas:\n- Busca ayuda con un adulto de confianza\n- Documenta los incidentes (fecha, hora, qué se dijo)\n- Evita situaciones de confrontación\n- Recuerda que mereces ser tratado/a con respeto{resources}"
+                ]
+            else:  # medium or low risk
+                verbal_responses = [
+                    f"Las palabras pueden doler profundamente, y entiendo lo difícil que debe ser escuchar cosas hirientes. Quiero que sepas que lo que dicen de ti no define quién eres realmente. Tú vales mucho más que esas palabras. ¿Te gustaría compartir conmigo lo que te están diciendo? A veces expresarlo puede ayudar a procesarlo.\n\n💬 Cómo manejar el acoso verbal:\n- No respondas con más insultos\n- Practica respuestas asertivas\n- Busca apoyo en amigos o adultos de confianza\n- Recuerda que las palabras ofensivas dicen más de quien las dice que de ti{resources}",
+                    f"Entiendo que las palabras pueden causar un dolor real, y lamento que estés pasando por esto. Es importante que sepas que esos comentarios no reflejan quién eres tú. ¿Has podido hablar con alguien de confianza sobre esta situación?\n\n💬 Estrategias frente al acoso verbal:\n- Mantén la calma y no respondas de la misma manera\n- Aléjate de la situación si es posible\n- Documenta los incidentes (fecha, hora, qué se dijo)\n- Habla con un adulto de confianza sobre lo que está pasando{resources}"
+                ]
             return random.choice(verbal_responses)
             
         elif bullying_type == "físico":
+            # Physical bullying is always treated as high risk
             physical_responses = [
                 f"Lo que me cuentas es muy serio y quiero que sepas que no está bien que alguien te lastime físicamente. Tu seguridad es lo más importante. Es fundamental que hables con un adulto de confianza sobre esto lo antes posible. ¿Hay algún adulto con quien te sientas seguro/a para hablar?\n\n🛡️ Ante el acoso físico:\n- Tu seguridad es prioritaria\n- Aléjate de situaciones peligrosas\n- Habla inmediatamente con un adulto de confianza\n- Recuerda que tienes derecho a estar seguro/a{emergency_resources}",
                 f"Nadie tiene derecho a lastimarte físicamente y lo que estás viviendo no es tu culpa. Es muy importante que busques ayuda de inmediato con un adulto de confianza como un familiar, profesor o consejero escolar. ¿Hay alguien así en quien puedas confiar?\n\n🛡️ Pasos importantes:\n- Mantente alejado/a de quien te lastima\n- Habla con un adulto de confianza hoy mismo\n- No enfrentes solo/a esta situación\n- Recuerda que mereces respeto y seguridad{emergency_resources}"
@@ -548,18 +644,57 @@ class Chatbot:
             return random.choice(physical_responses)
             
         elif bullying_type == "social":
-            social_responses = [
-                f"Ser excluido o ignorado puede ser muy doloroso, y entiendo que te sientas así. Quiero que sepas que no hay nada malo en ti y que mereces amistades que te valoren. ¿Te gustaría hablar sobre cómo te has estado sintiendo con esta situación?\n\n🤝 Ante la exclusión social:\n- Busca grupos o actividades donde puedas conocer nuevas personas\n- Cultiva las amistades positivas que ya tienes\n- Recuerda que la calidad de las amistades es más importante que la cantidad\n- Habla con alguien de confianza sobre cómo te sientes{emergency_resources}",
-                f"El rechazo social puede ser muy difícil de manejar, y es normal sentirse triste o confundido/a. Quiero que sepas que tu valor no depende de la aceptación de los demás. ¿Has podido identificar algunas personas o grupos donde te sientes más aceptado/a?\n\n🤝 Consejos para manejar la exclusión:\n- Fortalece tu autoestima recordando tus cualidades y logros\n- Busca actividades donde puedas conocer personas con intereses similares\n- Mantén las amistades que te hacen sentir valorado/a\n- Habla sobre tus sentimientos con alguien de confianza{emergency_resources}"
-            ]
+            if risk_level == "high":
+                social_responses = [
+                    f"La exclusión social que estás experimentando parece estar afectándote profundamente, y es comprensible. Esta situación es seria y merece atención. ¿Has podido hablar con algún adulto de confianza sobre cómo te sientes?\n\n🤝 Pasos importantes ahora:\n- Habla con un adulto de confianza como un familiar o consejero escolar\n- Busca grupos o actividades fuera de tu entorno habitual\n- Mantén contacto con las personas que te hacen sentir valorado/a\n- Considera hablar con un profesional sobre estos sentimientos{resources}",
+                    f"Entiendo que esta exclusión social te está causando un dolor significativo. Quiero que sepas que no estás solo/a y que esto no es un reflejo de tu valor como persona. ¿Hay algún adulto con quien puedas hablar sobre estos sentimientos?\n\n🤝 Acciones recomendadas:\n- Busca apoyo profesional para manejar estos sentimientos\n- Explora actividades donde puedas conocer personas con intereses similares\n- Habla con un adulto de confianza sobre la situación\n- Practica el autocuidado y la autocompasión diariamente{resources}"
+                ]
+            else:  # medium or low risk
+                social_responses = [
+                    f"Ser excluido o ignorado puede ser muy doloroso, y entiendo que te sientas así. Quiero que sepas que no hay nada malo en ti y que mereces amistades que te valoren. ¿Te gustaría hablar sobre cómo te has estado sintiendo con esta situación?\n\n🤝 Ante la exclusión social:\n- Busca grupos o actividades donde puedas conocer nuevas personas\n- Cultiva las amistades positivas que ya tienes\n- Recuerda que la calidad de las amistades es más importante que la cantidad\n- Habla con alguien de confianza sobre cómo te sientes{resources}",
+                    f"El rechazo social puede ser muy difícil de manejar, y es normal sentirse triste o confundido/a. Quiero que sepas que tu valor no depende de la aceptación de los demás. ¿Has podido identificar algunas personas o grupos donde te sientes más aceptado/a?\n\n🤝 Consejos para manejar la exclusión:\n- Fortalece tu autoestima recordando tus cualidades y logros\n- Busca actividades donde puedas conocer personas con intereses similares\n- Mantén las amistades que te hacen sentir valorado/a\n- Habla sobre tus sentimientos con alguien de confianza{resources}"
+                ]
             return random.choice(social_responses)
             
+        elif bullying_type == "cibernético":
+            if risk_level == "high":
+                cyber_responses = [
+                    f"El acoso en línea que me describes es muy serio y puede tener un impacto profundo. Es importante que sepas que esto no es tu culpa y que hay medidas que puedes tomar de inmediato. ¿Has hablado con algún adulto de confianza sobre esto?\n\n💻 Acciones inmediatas para el ciberacoso:\n- Guarda capturas de pantalla como evidencia\n- Bloquea a las personas que te están acosando\n- No respondas a los mensajes de acoso\n- Habla con un adulto de confianza hoy mismo\n- Reporta el contenido a la plataforma{resources}",
+                    f"Lo que me cuentas sobre este acoso en línea requiere atención inmediata. El ciberacoso es una forma seria de intimidación y no debes enfrentarlo solo/a. ¿Hay algún adulto con quien puedas hablar sobre esto ahora?\n\n💻 Pasos a seguir inmediatamente:\n- No respondas a los mensajes o publicaciones\n- Guarda toda la evidencia (capturas de pantalla)\n- Bloquea a los acosadores en todas las plataformas\n- Habla con tus padres o un adulto de confianza\n- Reporta el acoso a las plataformas sociales{resources}"
+                ]
+            else:  # medium or low risk
+                cyber_responses = [
+                    f"El acoso en línea puede ser muy doloroso y difícil de manejar. Quiero que sepas que no estás solo/a y que hay formas de protegerte en el mundo digital. ¿Has tomado alguna medida hasta ahora?\n\n💻 Estrategias contra el ciberacoso:\n- Guarda evidencia de los mensajes o publicaciones\n- Utiliza las herramientas de privacidad de las redes sociales\n- Bloquea a las personas que te molestan\n- Habla con un adulto de confianza sobre lo que está pasando{resources}",
+                    f"Entiendo que estos mensajes o publicaciones te están afectando. El mundo digital debería ser un espacio seguro para todos. ¿Has podido hablar con alguien sobre esta situación?\n\n💻 Consejos para protegerte en línea:\n- Revisa y ajusta tu configuración de privacidad\n- No compartas información personal con desconocidos\n- Guarda evidencia del acoso (capturas de pantalla)\n- Bloquea a quienes te envían mensajes negativos\n- Habla con un adulto de confianza{resources}"
+                ]
+            return random.choice(cyber_responses)
+            
         else:  # psicológico u otros
-            psychological_responses = [
-                f"La intimidación psicológica puede ser muy dañina y a veces difícil de explicar a los demás. Quiero que sepas que tus sentimientos son válidos y que no estás solo/a en esto. Vamos a buscar juntos la mejor manera de ayudarte. ¿Te sentirías cómodo/a compartiendo más detalles sobre tu experiencia?\n\n🧠 Ante la intimidación psicológica:\n- No minimices lo que sientes\n- Habla con un adulto de confianza\n- Practica técnicas de relajación\n- Recuerda que mereces respeto{emergency_resources}",
-                f"Entiendo que estás pasando por una situación difícil. El acoso psicológico puede ser muy sutil pero igualmente dañino. Es importante que sepas que no estás exagerando y que tus sentimientos son completamente válidos. ¿Has podido identificar patrones en esta situación?\n\n🧠 Estrategias de afrontamiento:\n- Lleva un diario de los incidentes\n- Establece límites claros\n- Busca apoyo profesional si es posible\n- Practica el autocuidado diariamente{emergency_resources}"
-            ]
+            if risk_level == "high":
+                psychological_responses = [
+                    f"Lo que me describes suena como una forma seria de intimidación psicológica que está teniendo un impacto significativo en ti. Es importante que busques apoyo profesional para manejar esta situación. ¿Hay algún adulto de confianza con quien puedas hablar hoy mismo?\n\n🧠 Acciones inmediatas:\n- Habla con un adulto de confianza hoy mismo\n- Considera buscar apoyo de un profesional de salud mental\n- Establece límites claros con quienes te están afectando\n- Practica técnicas de autocuidado y manejo del estrés{resources}",
+                    f"Esta situación de intimidación psicológica que describes requiere atención inmediata. No debes enfrentar esto solo/a, y hay personas que pueden ayudarte. ¿Puedes hablar con un adulto de confianza sobre lo que estás experimentando?\n\n🧠 Pasos importantes a seguir:\n- Busca apoyo de un adulto de confianza inmediatamente\n- Considera hablar con un consejero escolar o psicólogo\n- Mantén un registro detallado de los incidentes\n- Prioriza tu bienestar emocional y físico{resources}"
+                ]
+            else:  # medium or low risk
+                psychological_responses = [
+                    f"La intimidación psicológica puede ser muy dañina y a veces difícil de explicar a los demás. Quiero que sepas que tus sentimientos son válidos y que no estás solo/a en esto. Vamos a buscar juntos la mejor manera de ayudarte. ¿Te sentirías cómodo/a compartiendo más detalles sobre tu experiencia?\n\n🧠 Ante la intimidación psicológica:\n- No minimices lo que sientes\n- Habla con un adulto de confianza\n- Practica técnicas de relajación\n- Recuerda que mereces respeto{resources}",
+                    f"Entiendo que estás pasando por una situación difícil. El acoso psicológico puede ser muy sutil pero igualmente dañino. Es importante que sepas que no estás exagerando y que tus sentimientos son completamente válidos. ¿Has podido identificar patrones en esta situación?\n\n🧠 Estrategias de afrontamiento:\n- Lleva un diario de los incidentes\n- Establece límites claros\n- Busca apoyo profesional si es posible\n- Practica el autocuidado diariamente{resources}"
+                ]
             return random.choice(psychological_responses)
+            
+    def _get_risk_level(self, prediction, confidence, bullying_type):
+        """Helper method to determine risk level based on prediction, confidence, and bullying type"""
+        if prediction != 1:
+            return "low"
+            
+        if bullying_type == "físico":
+            return "high"  # Physical bullying is always high risk
+        elif confidence > 0.8:
+            return "high"
+        elif confidence > 0.6 or bullying_type == "cibernético":
+            return "medium"
+        else:
+            return "low"
     
     def get_user_history(self, user_id):
         """
