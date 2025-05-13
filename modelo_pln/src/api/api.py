@@ -198,13 +198,36 @@ async def process_message(request: MessageRequest):
                     )
                     db.connection.commit()
                 
-                # Create conversation
-                conversation_id = db.create_conversation(
-                    request.user_id,
-                    request.metadata or {},
-                    created_by=request.created_by
+                # Check if user has an active conversation
+                cursor.execute(
+                    """
+                    SELECT id FROM conversations 
+                    WHERE user_id = %s AND is_active = TRUE 
+                    ORDER BY start_time DESC LIMIT 1
+                    """,
+                    (request.user_id,)
                 )
-                print(f"Conversation created with ID: {conversation_id}")
+                active_conversation = cursor.fetchone()
+                
+                if active_conversation:
+                    # Use existing conversation
+                    conversation_id = active_conversation['id']
+                    print(f"Using existing conversation with ID: {conversation_id}")
+                    
+                    # Update last_interaction time
+                    cursor.execute(
+                        "UPDATE conversations SET last_interaction = NOW() WHERE id = %s",
+                        (conversation_id,)
+                    )
+                    db.connection.commit()
+                else:
+                    # Create new conversation
+                    conversation_id = db.create_conversation(
+                        request.user_id,
+                        request.metadata or {},
+                        created_by=request.created_by
+                    )
+                    print(f"New conversation created with ID: {conversation_id}")
                 
             except Exception as e:
                 print(f"Error creating user or conversation: {str(e)}")

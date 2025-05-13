@@ -4,7 +4,6 @@ import json
 import os
 import random
 import re
-import datetime
 
 class Chatbot:
     def __init__(self):
@@ -40,7 +39,7 @@ class Chatbot:
             'message': message,
             'response': response,
             'analysis': analysis,
-            'timestamp': datetime.datetime.now().isoformat()
+            'timestamp': self.nlp.get_timestamp()
         }
         self.logs.append(log_entry)
         
@@ -141,83 +140,17 @@ class Chatbot:
                     'context': {'hypothetical': False, 'context_words': []}
                 }
             
-            # Check for emotional expressions that might indicate distress
-            emotional_expressions = {
-                # Tristeza
-                "tristeza": ["me siento triste", "estoy triste", "me siento mal", "me siento deprimido", "me siento deprimida", 
-                            "me siento desanimado", "me siento desanimada", "me siento abatido", "me siento abatida",
-                            "tengo ganas de llorar", "he llorado", "lloro", "me siento sin ánimo", "no tengo ganas",
-                            "triste", "me siento un poco triste", "estoy un poco triste", "me siento algo triste"],
-                
-                # Ansiedad
-                "ansiedad": ["me siento ansioso", "me siento ansiosa", "estoy nervioso", "estoy nerviosa", 
-                            "me preocupa", "tengo miedo", "me asusta", "me da pánico", "me siento estresado", "me siento estresada"],
-                
-                # Soledad
-                "soledad": ["me siento solo", "me siento sola", "estoy solo", "estoy sola", "nadie me quiere", 
-                           "no tengo amigos", "no tengo amigas", "nadie habla conmigo", "me siento aislado", "me siento aislada"],
-                
-                # Bullying
-                "bullying": ["me molestan", "se burlan", "me insultan", "me hacen sentir", "me excluyen",
-                            "no me incluyen", "me dejan fuera", "me ignoran", "no me hablan",
-                            "me pegan", "me empujan", "me golpean", "me amenazan"]
-            }
+            # Check for bullying indicators in emotional expressions
+            emotional_bullying_indicators = [
+                "me siento triste porque", "me siento mal porque", "estoy triste porque",
+                "me molestan", "se burlan", "me insultan", "me hacen sentir", "me excluyen",
+                "no me incluyen", "me dejan fuera", "me ignoran", "no me hablan",
+                "me siento solo", "me siento sola", "nadie quiere", "no quieren"
+            ]
             
-            # Detect emotional expressions in the message
-            detected_emotions = {}
-            for emotion, indicators in emotional_expressions.items():
-                if any(indicator in message_lower for indicator in indicators):
-                    detected_emotions[emotion] = True
-                    print(f"Detected emotional expression '{emotion}' in: '{message_lower}'")
-            
-            # If tristeza (sadness) is detected without bullying indicators, provide an empathetic response
-            if "tristeza" in detected_emotions and not "bullying" in detected_emotions:
-                print(f"Detected sadness without bullying in: '{message_lower}'")
-                return self._generate_sadness_response(message_lower), {
-                    'is_bullying': False,
-                    'confidence': 0.0,
-                    'bullying_type': "ninguno",
-                    'keywords': {'categories': {}, 'keywords': message_lower.split()},
-                    'sentiment': 'negative',
-                    'sentiment_score': -0.6,
-                    'emotion': {'type': 'sadness', 'intensity': 0.7},
-                    'risk': {'level': 'low', 'type': 'emotional_distress'},
-                    'context': {'hypothetical': False, 'context_words': []}
-                }
-                
-            # If ansiedad (anxiety) is detected without bullying indicators, provide a calming response
-            if "ansiedad" in detected_emotions and not "bullying" in detected_emotions:
-                print(f"Detected anxiety without bullying in: '{message_lower}'")
-                return self._generate_anxiety_response(message_lower), {
-                    'is_bullying': False,
-                    'confidence': 0.0,
-                    'bullying_type': "ninguno",
-                    'keywords': {'categories': {}, 'keywords': message_lower.split()},
-                    'sentiment': 'negative',
-                    'sentiment_score': -0.5,
-                    'emotion': {'type': 'anxiety', 'intensity': 0.7},
-                    'risk': {'level': 'low', 'type': 'emotional_distress'},
-                    'context': {'hypothetical': False, 'context_words': []}
-                }
-                
-            # If soledad (loneliness) is detected without bullying indicators, provide a supportive response
-            if "soledad" in detected_emotions and not "bullying" in detected_emotions:
-                print(f"Detected loneliness without bullying in: '{message_lower}'")
-                return self._generate_loneliness_response(message_lower), {
-                    'is_bullying': False,
-                    'confidence': 0.0,
-                    'bullying_type': "ninguno",
-                    'keywords': {'categories': {}, 'keywords': message_lower.split()},
-                    'sentiment': 'negative',
-                    'sentiment_score': -0.7,
-                    'emotion': {'type': 'loneliness', 'intensity': 0.8},
-                    'risk': {'level': 'low', 'type': 'emotional_distress'},
-                    'context': {'hypothetical': False, 'context_words': []}
-                }
-            
-            # If bullying indicators are detected, check for specific contexts
-            if "bullying" in detected_emotions:
-                print(f"Detected bullying indicators in: '{message_lower}'")
+            # If the message contains emotional bullying indicators, increase the likelihood of bullying detection
+            if any(indicator in message_lower for indicator in emotional_bullying_indicators):
+                print(f"Detected emotional bullying indicator in: '{message_lower}'")
                 # Check for specific bullying contexts
                 if "compañeros" in message_lower or "escuela" in message_lower or "colegio" in message_lower or "clase" in message_lower:
                     # This is likely school bullying
@@ -245,14 +178,9 @@ class Chatbot:
             context_confidence_reduction = max([context_indicators[word] for word in context_words]) if context_words else 0
             
             # Get sentiment analysis
-            try:
-                sentiment_result = self.nlp.analyze_sentiment(message)
-                sentiment = sentiment_result.get('sentiment', 'neutral')
-                sentiment_score = sentiment_result.get('score', 0.0)
-            except Exception as e:
-                print(f"Error in sentiment analysis: {e}")
-                sentiment = 'neutral'
-                sentiment_score = 0.0
+            sentiment_result = self.nlp.analyze_sentiment(message)
+            sentiment = sentiment_result['sentiment']
+            sentiment_score = sentiment_result['score']
             
             # Detect positive sentiment to avoid false positives
             positive_indicators = [
@@ -283,21 +211,7 @@ class Chatbot:
                 }
             
             # Use the model to predict if the message involves bullying
-            try:
-                prediction_result = self.bullying_model.predict(message)
-                if isinstance(prediction_result, tuple) and len(prediction_result) == 3:
-                    prediction, confidence, bullying_type = prediction_result
-                else:
-                    # Si el modelo devuelve menos valores de los esperados, establecemos valores predeterminados
-                    print(f"Unexpected prediction result format: {prediction_result}")
-                    prediction = 0
-                    confidence = 0.0
-                    bullying_type = "ninguno"
-            except Exception as e:
-                print(f"Error in prediction: {e}")
-                prediction = 0
-                confidence = 0.0
-                bullying_type = "ninguno"
+            prediction, confidence, bullying_type = self.bullying_model.predict(message)
             
             # Adjust confidence based on context
             if context_confidence_reduction > 0:
@@ -459,57 +373,6 @@ class Chatbot:
             "¡Qué maravilla! Gracias por compartir esa experiencia positiva conmigo. Estoy aquí para seguir conversando sobre lo que tú quieras."
         ]
         return random.choice(positive_responses)
-        
-    def _generate_sadness_response(self, message):
-        """
-        Generate an empathetic response for messages expressing sadness
-        """
-        sadness_responses = [
-            "Entiendo que te sientas triste. A veces todos pasamos por momentos difíciles. ¿Te gustaría hablar sobre lo que te está haciendo sentir así? Estoy aquí para escucharte.",
-            
-            "Lamento que estés pasando por un momento triste. Quiero que sepas que no estás solo/a en esto. ¿Hay algo específico que te esté preocupando o entristeciendo que te gustaría compartir?",
-            
-            "La tristeza es una emoción natural y es importante permitirnos sentirla. ¿Hay algo que pueda hacer para apoyarte en este momento? A veces simplemente hablar sobre lo que sentimos puede ayudarnos.",
-            
-            "Me importa cómo te sientes y quiero que sepas que estoy aquí para ti. ¿Hay algo en particular que te haya hecho sentir triste hoy? Compartirlo puede ser un primer paso para sentirte mejor.",
-            
-            "Gracias por compartir conmigo cómo te sientes. La tristeza es una emoción difícil, pero también nos ayuda a procesar situaciones complicadas. ¿Te gustaría hablar sobre lo que te está pasando?"
-        ]
-        return random.choice(sadness_responses)
-        
-    def _generate_anxiety_response(self, message):
-        """
-        Generate a calming response for messages expressing anxiety
-        """
-        anxiety_responses = [
-            "Entiendo que te sientas ansioso/a. La ansiedad puede ser muy intensa, pero hay formas de manejarla. ¿Te gustaría que exploremos algunas técnicas de respiración que pueden ayudarte a calmarte?",
-            
-            "La ansiedad es una respuesta natural de nuestro cuerpo, aunque a veces puede ser abrumadora. ¿Hay algo específico que esté causando tu ansiedad? Identificar la causa puede ser el primer paso para manejarla.",
-            
-            "Lamento que estés experimentando ansiedad. Estoy aquí para apoyarte. Una técnica que puede ayudar es la respiración profunda: inhala contando hasta 4, mantén el aire contando hasta 2, y exhala contando hasta 6. ¿Te gustaría intentarlo?",
-            
-            "Es comprensible sentirse ansioso/a a veces. ¿Hay algo específico que te preocupe? A veces, hablar sobre nuestras preocupaciones puede ayudarnos a verlas desde una perspectiva diferente.",
-            
-            "La ansiedad puede ser muy difícil de manejar. Quiero que sepas que no estás solo/a en esto. ¿Has identificado qué situaciones o pensamientos desencadenan tu ansiedad? Esto podría ayudarnos a encontrar estrategias específicas para ti."
-        ]
-        return random.choice(anxiety_responses)
-        
-    def _generate_loneliness_response(self, message):
-        """
-        Generate a supportive response for messages expressing loneliness
-        """
-        loneliness_responses = [
-            "Sentirse solo/a puede ser muy difícil. Quiero que sepas que estoy aquí para ti y que no estás solo/a en este momento. ¿Te gustaría hablar sobre lo que te hace sentir así?",
-            
-            "La soledad es una experiencia que todos sentimos en algún momento. ¿Hay algo específico que te esté haciendo sentir solo/a? A veces, identificar la causa puede ayudarnos a encontrar formas de conectar con otros.",
-            
-            "Entiendo lo que es sentirse solo/a y quiero que sepas que me importa cómo te sientes. ¿Has pensado en actividades o grupos donde podrías conocer personas con intereses similares a los tuyos?",
-            
-            "Lamento que te sientas solo/a. Es una emoción difícil, pero también puede ser una oportunidad para reflexionar sobre qué tipo de conexiones son importantes para ti. ¿Hay personas con las que te gustaría reconectar?",
-            
-            "La soledad puede ser muy dolorosa. Estoy aquí para escucharte y apoyarte. ¿Te gustaría hablar sobre estrategias para construir conexiones significativas con otras personas?"
-        ]
-        return random.choice(loneliness_responses)
         
     def _generate_response(self, prediction, confidence, bullying_type):
         # Emergency resources (only show for high risk situations)
