@@ -429,9 +429,18 @@ class BullyingDetectionModel:
         
         return report
     
-    def save_model(self, path='/app/data/models/'):
+    def save_model(self, path=None):
         """Guarda el modelo y las características de texto"""
         try:
+            # Usar un path local si no se especifica uno
+            if path is None:
+                # Usar el directorio actual o crear un directorio models/ en la raíz del proyecto
+                path = os.path.join(os.getcwd(), 'models')
+                
+                # Si estamos en un entorno Docker, usar /app/data/models/
+                if os.path.exists('/app'):
+                    path = '/app/data/models/'
+            
             # Asegurarse de que el directorio existe
             os.makedirs(path, exist_ok=True)
             
