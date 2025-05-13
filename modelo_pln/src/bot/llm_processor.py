@@ -38,10 +38,14 @@ class LLMProcessor:
         self.ollama_url = f"http://{host}:{port}"
         logger.info(f"Initialized LLM Processor with model: {self.model_name} at {self.ollama_url}")
         
+        # Verify connection to Ollama at initialization
+        self._verify_ollama_connection()
+        
     def generate_response(self, conversation_history: List[Dict[str, str]], 
                          user_info: Optional[Dict[str, Any]] = None,
                          is_bullying: bool = False,
-                         bullying_type: str = None) -> str:
+                         bullying_type: str = None,
+                         current_message: str = None) -> str:
         """
         Generate a response using the LLM based on conversation history.
         
@@ -58,8 +62,17 @@ class LLMProcessor:
         messages = []
         
         # Add system prompt with instructions
-        system_prompt = self._create_system_prompt(is_bullying, bullying_type, user_info)
+        system_prompt = self._create_system_prompt(is_bullying, bullying_type, user_info, current_message)
         messages.append({"role": "system", "content": system_prompt})
+        
+        # Log the system prompt for debugging
+        logger.info(f"System prompt: {system_prompt[:200]}...")
+        
+        # Log the conversation history for debugging
+        logger.info(f"Conversation history length: {len(conversation_history)}")
+        if conversation_history:
+            last_message = conversation_history[-1] if conversation_history else None
+            logger.info(f"Last message in history: {last_message}")
         
         # Add conversation history
         for message in conversation_history:
@@ -71,6 +84,10 @@ class LLMProcessor:
         # Call Ollama API
         try:
             logger.info(f"Calling Ollama API with {len(messages)} messages")
+            # Log the URL being called for debugging
+            logger.info(f"Calling Ollama API at URL: {self.ollama_url}/api/chat")
+            
+            # Increase timeout to 60 seconds
             response = requests.post(
                 f"{self.ollama_url}/api/chat",
                 json={
@@ -81,7 +98,7 @@ class LLMProcessor:
                     "top_p": 0.9,
                     "max_tokens": 500
                 },
-                timeout=30
+                timeout=60  # Increased timeout
             )
             response.raise_for_status()
             result = response.json()
@@ -89,9 +106,9 @@ class LLMProcessor:
             return result["message"]["content"]
         except requests.exceptions.RequestException as e:
             logger.error(f"Error calling Ollama API: {e}")
-            return self._get_fallback_response(is_bullying, bullying_type)
+            return self._get_fallback_response(is_bullying, bullying_type, current_message)
     
-    def _create_system_prompt(self, is_bullying: bool, bullying_type: str, user_info: Optional[Dict[str, Any]]) -> str:
+    def _create_system_prompt(self, is_bullying: bool, bullying_type: str, user_info: Optional[Dict[str, Any]], current_message: str = None) -> str:
         """
         Create a system prompt based on the current context.
         
@@ -99,6 +116,7 @@ class LLMProcessor:
             is_bullying: Whether the current message is detected as bullying
             bullying_type: The type of bullying detected (if any)
             user_info: Optional information about the user
+            current_message: The current message from the user
             
         Returns:
             System prompt text
@@ -112,6 +130,11 @@ class LLMProcessor:
             "Mantén tus respuestas breves y claras, adecuadas para niños."
         )
         
+        # Add information about the current message if available
+        if current_message:
+            message_context = f"\n\nEl mensaje actual del usuario es: '{current_message}'"
+            base_prompt += message_context
+        
         # Add bullying-specific instructions if bullying is detected
         if is_bullying:
             bullying_prompt = (
@@ -122,6 +145,51 @@ class LLMProcessor:
                 "Anima al niño a hablar con un adulto de confianza sobre la situación."
             )
             base_prompt += bullying_prompt
+        else:
+            # Determine the type of message and add specific instructions
+            if current_message:
+                message_lower = current_message.lower()
+                
+                # Check if it's a greeting
+                if any(greeting in message_lower for greeting in ["hola", "buenos días", "buenas tardes", "buenas noches", "saludos", "hey", "hi"]):
+                    greeting_prompt = (
+                        "\n\nEste es un saludo. Responde de manera amigable y entusiasta. "
+                        "Haz una pregunta abierta sobre cómo se siente o qué ha hecho hoy. "
+                        "Sé conversacional y natural, como un amigo que está feliz de hablar con ellos."
+                    )
+                    base_prompt += greeting_prompt
+                    
+                # Check if it's about school or achievements
+                elif any(word in message_lower for word in ["escuela", "colegio", "clase", "examen", "nota", "matemáticas", "ciencias"]):
+                    school_prompt = (
+                        "\n\nEste mensaje es sobre la escuela o logros académicos. "
+                        "Muestra entusiasmo genuino por sus logros. "
+                        "Felícitalo de manera específica por lo que ha compartido. "
+                        "Haz preguntas de seguimiento sobre cómo se sintió o qué fue lo que más le gustó. "
+                        "Evita respuestas genéricas como 'gracias por compartir'."
+                    )
+                    base_prompt += school_prompt
+                
+                # Default instructions for other types of messages
+                else:
+                    normal_prompt = (
+                        "\n\nEste parece ser un mensaje normal, no relacionado con bullying. "
+                        "Responde de manera amigable y conversacional. "
+                        "Muestra interés genuino en lo que el niño está compartiendo. "
+                        "Haz preguntas de seguimiento relevantes para mantener la conversación. "
+                        "Evita respuestas genéricas como 'gracias por compartir' cuando no sea apropiado."
+                    )
+                    base_prompt += normal_prompt
+            else:
+                # Default instructions if no current message is available
+                normal_prompt = (
+                    "\n\nEste parece ser un mensaje normal, no relacionado con bullying. "
+                    "Responde de manera amigable y conversacional. "
+                    "Si es un saludo o una pregunta simple, responde de forma natural y cercana. "
+                    "Si el niño comparte información sobre su día o sus actividades, muestra interés genuino. "
+                    "Evita respuestas genéricas como 'gracias por compartir' cuando no sea apropiado."
+                )
+                base_prompt += normal_prompt
         
         # Add user-specific instructions if available
         if user_info:
@@ -130,19 +198,54 @@ class LLMProcessor:
                 age_prompt = f"\n\nEl usuario tiene aproximadamente {age} años. Adapta tu lenguaje a esta edad."
                 base_prompt += age_prompt
         
+        # Add final instructions for all cases
+        base_prompt += (
+            "\n\nRecuerda que estás conversando con un niño. Sé natural, amigable y cercano. "
+            "Evita respuestas que suenen como plantillas o respuestas genéricas. "
+            "Adapta tu respuesta al contexto específico de la conversación."
+        )
+        
         return base_prompt
     
-    def _get_fallback_response(self, is_bullying: bool, bullying_type: str) -> str:
+    def _get_fallback_response(self, is_bullying: bool, bullying_type: str, current_message: str = None) -> str:
         """
         Get a fallback response in case the LLM call fails.
         
         Args:
             is_bullying: Whether the current message is detected as bullying
             bullying_type: The type of bullying detected (if any)
+            current_message: The current message from the user
             
         Returns:
             Fallback response text
         """
+        # Check if we have a current message to analyze
+        if current_message and not is_bullying:
+            message_lower = current_message.lower()
+            
+            # Check if it's a greeting
+            if any(greeting in message_lower for greeting in ["hola", "buenos días", "buenas tardes", "buenas noches", "saludos", "hey", "hi"]):
+                return (
+                    "¡Hola! ¿Cómo estás hoy? Me alegra mucho hablar contigo. "
+                    "¿Hay algo especial que te gustaría contarme?"
+                )
+            
+            # Check if it's about school or achievements
+            elif any(word in message_lower for word in ["escuela", "colegio", "clase", "examen", "nota", "matemáticas", "ciencias"]):
+                return (
+                    "¡Qué bueno saber sobre tu experiencia en la escuela! "
+                    "Me alegra mucho que compartas eso conmigo. "
+                    "¿Cómo te sentiste al respecto? Me encantaría saber más."
+                )
+            
+            # Check if it's about feelings or emotions
+            elif any(word in message_lower for word in ["triste", "feliz", "enojado", "contento", "preocupado", "miedo", "nervioso"]):
+                return (
+                    "Gracias por compartir cómo te sientes. Es importante expresar nuestras emociones. "
+                    "¿Hay algo que pueda hacer para ayudarte?"
+                )
+        
+        # Bullying-specific responses
         if is_bullying:
             return (
                 "Entiendo que estás pasando por una situación difícil. "
@@ -150,12 +253,38 @@ class LLMProcessor:
                 "¿Hay alguien con quien te sientas cómodo hablando? "
                 "Estoy aquí para escucharte y ayudarte."
             )
-        else:
-            return (
-                "Gracias por compartir eso conmigo. "
-                "¿Hay algo más de lo que te gustaría hablar? "
-                "Estoy aquí para escucharte."
-            )
+        
+        # Default response
+        return (
+            "Gracias por compartir eso conmigo. "
+            "¿Hay algo más de lo que te gustaría hablar? "
+            "Estoy aquí para escucharte."
+        )
+    
+    def _verify_ollama_connection(self) -> None:
+        """
+        Verify the connection to Ollama at initialization and log the result.
+        """
+        try:
+            response = requests.get(f"{self.ollama_url}/api/tags", timeout=10)
+            response.raise_for_status()
+            models = response.json().get("models", [])
+            
+            if models:
+                model_names = [model.get("name", "") for model in models]
+                logger.info(f"Successfully connected to Ollama. Available models: {model_names}")
+                
+                # Check if our model is in the list
+                model_prefix = self.model_name.split(":")[0]
+                if any(model.startswith(model_prefix) for model in model_names):
+                    logger.info(f"Model {self.model_name} is available in Ollama")
+                else:
+                    logger.warning(f"Model {self.model_name} not found in Ollama. Available models: {model_names}")
+            else:
+                logger.warning("Connected to Ollama but no models are available")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error connecting to Ollama at {self.ollama_url}: {e}")
+            logger.info("Will attempt to use fallback responses when generating responses")
     
     def check_ollama_status(self) -> bool:
         """

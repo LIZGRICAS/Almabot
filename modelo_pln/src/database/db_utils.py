@@ -26,6 +26,30 @@ class Database:
         except Error as e:
             print(f"Error connecting to MySQL: {e}")
             return False
+            
+    def test_connection(self):
+        """
+        Prueba la conexión a la base de datos y devuelve True si tiene éxito
+        Lanza una excepción si falla la conexión
+        """
+        if self.connection and self.connection.is_connected():
+            return True
+            
+        # Intentar conectar
+        if not self.connect():
+            raise Exception("No se pudo conectar a la base de datos")
+            
+        # Verificar que la conexión funciona ejecutando una consulta simple
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+            cursor.close()
+            return True
+        except Error as e:
+            raise Exception(f"Error al ejecutar consulta de prueba: {str(e)}")
+        except Exception as e:
+            raise Exception(f"Error inesperado al probar la conexión: {str(e)}")
 
     def log_audit(self, table_name: str, record_id: str, action: str, old_data: Dict = None, new_data: Dict = None, user_id: str = None):
         """Log an audit entry for a database operation"""

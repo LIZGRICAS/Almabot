@@ -103,19 +103,29 @@ class EnhancedChatbot:
             # 2. Extract keywords for analysis
             keywords = self.nlp.extract_keywords(message)
             
-            # 3. Get conversation context
+            # 3. Get conversation context (previous messages)
             conversation_history = self.conversation_manager.get_conversation_context(user_id)
             
-            # 4. Add user message to context
-            self.conversation_manager.add_message(user_id, "user", message)
+            # 4. Create a direct message for the current user input to ensure it's included
+            current_message = {"role": "user", "content": message}
             
-            # 5. Generate response using LLM
+            # 5. Combine previous history with current message
+            full_context = conversation_history + [current_message]
+            
+            # Log the full context for debugging
+            logger.info(f"Full conversation context for user {user_id}: {json.dumps(full_context, ensure_ascii=False)}")
+            
+            # 6. Generate response using LLM with the complete context
             llm_response = self.llm_processor.generate_response(
-                conversation_history,
+                full_context,
                 user_info=user_info,
                 is_bullying=is_bullying,
-                bullying_type=bullying_type
+                bullying_type=bullying_type,
+                current_message=message
             )
+            
+            # 7. Add both user message and response to the conversation history
+            self.conversation_manager.add_message(user_id, "user", message)
             
             # 6. Add LLM response to context
             self.conversation_manager.add_message(user_id, "assistant", llm_response)
@@ -166,7 +176,18 @@ class EnhancedChatbot:
             confidence = 0.0
             bullying_type = "ninguno"
             
-            # Check for positive sentiment words first
+            # Check for common greetings and very short messages first
+            common_greetings = ["hola", "buenos días", "buenas tardes", "buenas noches", "saludos", "hey", "hi"]
+            common_questions = ["cómo estás", "qué tal", "cómo te va", "cómo va todo", "qué haces", "qué estás haciendo"]
+            
+            # If the message is a greeting or contains a common question, it's not bullying
+            if (message_lower.strip() in common_greetings or 
+                any(greeting in message_lower for greeting in common_greetings) or
+                any(question in message_lower for question in common_questions) or
+                len(message_lower.split()) <= 3):
+                return "ninguno", False, 0.0
+            
+            # Check for positive sentiment words
             positive_words = ["feliz", "contento", "alegre", "bien", "genial", "excelente", "maravilloso", 
                              "fantástico", "divertido", "agradable", "bueno", "positivo", "encantado"]
             
@@ -203,20 +224,32 @@ class EnhancedChatbot:
                 confidence = max(0.85, model_confidence)
             # If model detected bullying but we haven't categorized it yet
             elif model_prediction == 1:
-                prediction = 1
-                confidence = model_confidence
-                
-                # Determine bullying type based on keywords if not already set
-                if "verbal" in message_lower:
-                    bullying_type = "verbal"
-                elif "social" in message_lower:
-                    bullying_type = "social"
-                elif "cibernético" in message_lower or "internet" in message_lower:
-                    bullying_type = "cibernético"
-                elif "físico" in message_lower:
-                    bullying_type = "físico"
+                # Require a minimum confidence for uncategorized bullying detection
+                if model_confidence > 0.7:
+                    prediction = 1
+                    confidence = model_confidence
+                    
+                    # Determine bullying type based on keywords if not already set
+                    if any(word in message_lower for word in ["insultar", "insulto", "gritar", "burlar", "burla", "decir", "dice", "dicen", "llamar", "llaman"]):
+                        bullying_type = "verbal"
+                    elif any(word in message_lower for word in ["excluir", "excluyen", "ignorar", "ignoran", "rechazar", "rechazan", "no me invitan", "no me incluyen", "no me hablan"]):
+                        bullying_type = "social"
+                    elif any(word in message_lower for word in ["mensaje", "whatsapp", "facebook", "instagram", "tiktok", "internet", "online", "en línea", "foto", "video"]):
+                        bullying_type = "cibernético"
+                    elif any(word in message_lower for word in ["empujar", "empujan", "golpear", "golpean", "pegar", "pegan", "patear", "patean", "tirar", "tiran"]):
+                        bullying_type = "físico"
+                    else:
+                        # Para clasificar como psicológico, requerimos un umbral de confianza más alto
+                        if model_confidence > 0.85:
+                            bullying_type = "psicológico"  # Default type if bullying detected but type unclear
+                        else:
+                            # Si la confianza no es suficiente para bullying psicológico, no lo clasificamos como bullying
+                            prediction = 0
+                            confidence = 1.0 - model_confidence  # Invertir la confianza para no-bullying
                 else:
-                    bullying_type = "psicológico"  # Default type if bullying detected but type unclear
+                    # If confidence is too low, don't classify as bullying
+                    prediction = 0
+                    confidence = 1.0 - model_confidence  # Invert confidence for non-bullying
             
             return bullying_type, bool(prediction), float(confidence)
             

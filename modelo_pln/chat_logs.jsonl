@@ -1,0 +1,1 @@
+{"timestamp": "2025-05-13T00:34:00.834403", "input_text": "Mis compa\u00f1eros me empujan y se burlan de m\u00ed en el recreo", "analysis": {"is_bullying": false, "confidence": 0.6, "risk_level": "bajo", "bullying_type": "ninguno", "processed_text": "mis compa\u00f1eros me empujan y se burlan de m\u00ed en el recreo"}}

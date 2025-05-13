@@ -442,9 +442,24 @@ def prepare_data():
         print(f"Error al preparar los datos: {e}")
         raise
 
-def main():
-    """Función principal para entrenar el modelo"""
+def main(force_training=False):
+    """Función principal para entrenar el modelo
+    
+    Args:
+        force_training (bool): Si es True, fuerza el reentrenamiento del modelo aunque ya exista.
+                              Si es False, usa el modelo existente si está disponible.
+    """
     try:
+        # Verificar si el modelo ya existe
+        model_path = os.environ.get('MODEL_PATH', 'models/model_8001')
+        model_exists = os.path.exists(model_path)
+        
+        if model_exists and not force_training:
+            print("\n=== Modelo existente detectado ===")
+            print(f"Usando modelo existente en: {model_path}")
+            print("Para reentrenar el modelo, establece FORCE_TRAINING=true")
+            return 0
+            
         print("\n=== Iniciando proceso de entrenamiento ===")
         start_time = datetime.now()
         
