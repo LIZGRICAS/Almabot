@@ -87,19 +87,37 @@ class LLMProcessor:
             # Log the URL being called for debugging
             logger.info(f"Calling Ollama API at URL: {self.ollama_url}/api/chat")
             
-            # Increase timeout to 60 seconds
-            response = requests.post(
-                f"{self.ollama_url}/api/chat",
-                json={
-                    "model": self.model_name,
-                    "messages": messages,
-                    "stream": False,
-                    "temperature": 0.7,
-                    "top_p": 0.9,
-                    "max_tokens": 500
-                },
-                timeout=60  # Increased timeout
-            )
+            # Increase timeout to 180 seconds and add retries
+            max_retries = 3
+            current_retry = 0
+            backoff_factor = 2  # Exponential backoff
+            
+            while current_retry < max_retries:
+                try:
+                    logger.info(f"Attempt {current_retry + 1}/{max_retries} to call Ollama API")
+                    response = requests.post(
+                        f"{self.ollama_url}/api/chat",
+                        json={
+                            "model": self.model_name,
+                            "messages": messages,
+                            "stream": False,
+                            "temperature": 0.7,
+                            "top_p": 0.9,
+                            "max_tokens": 500
+                        },
+                        timeout=180  # Increased timeout to 3 minutes
+                    )
+                    response.raise_for_status()
+                    break  # Exit the retry loop if successful
+                except requests.exceptions.RequestException as e:
+                    current_retry += 1
+                    if current_retry >= max_retries:
+                        logger.error(f"Failed after {max_retries} attempts: {e}")
+                        raise
+                    wait_time = backoff_factor ** current_retry
+                    logger.warning(f"Retrying in {wait_time} seconds after error: {e}")
+                    import time
+                    time.sleep(wait_time)
             response.raise_for_status()
             result = response.json()
             logger.info(f"Received response from Ollama API")
@@ -266,7 +284,7 @@ class LLMProcessor:
         Verify the connection to Ollama at initialization and log the result.
         """
         try:
-            response = requests.get(f"{self.ollama_url}/api/tags", timeout=10)
+            response = requests.get(f"{self.ollama_url}/api/tags", timeout=30)
             response.raise_for_status()
             models = response.json().get("models", [])
             
@@ -294,7 +312,7 @@ class LLMProcessor:
             True if Ollama is running and the model is available, False otherwise
         """
         try:
-            response = requests.get(f"{self.ollama_url}/api/tags", timeout=5)
+            response = requests.get(f"{self.ollama_url}/api/tags", timeout=30)
             response.raise_for_status()
             models = response.json().get("models", [])
             
