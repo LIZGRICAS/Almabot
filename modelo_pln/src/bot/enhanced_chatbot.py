@@ -2,7 +2,7 @@
 Enhanced Chatbot Module
 
 This module provides the enhanced chatbot implementation that combines
-bullying detection with natural language generation using a local LLM.
+bullying detection with natural language generation using external LLM APIs.
 """
 
 import json
@@ -27,13 +27,15 @@ class EnhancedChatbot:
     generation using a local LLM (Ollama with Mistral 7B or Llama 2).
     """
     
-    def __init__(self, db_connection=None, model_name="mistral:7b-instruct"):
+    def __init__(self, db_connection=None, model_name="gpt-3.5-turbo", api_key=None, api_type="openai"):
         """
         Initialize the enhanced chatbot.
         
         Args:
             db_connection: Database connection object
-            model_name: Name of the Ollama model to use
+            model_name: Name of the LLM model to use
+            api_key: API key for the LLM service
+            api_type: Type of API to use (openai, azure, etc.)
         """
         self.nlp = NLPProcessor()
         self.bullying_model = BullyingDetectionModel()
@@ -44,11 +46,16 @@ class EnhancedChatbot:
             logger.error(f"Error loading bullying detection model: {e}")
         
         self.conversation_manager = ConversationManager(db_connection)
-        self.llm_processor = LLMProcessor(model_name=model_name)
         
-        # Check if Ollama is available
-        if not self.llm_processor.check_ollama_status():
-            logger.warning("Ollama is not available. Using fallback responses.")
+        # Use environment variables if parameters are not provided
+        api_key = api_key or os.getenv("LLM_API_KEY", "")
+        api_type = api_type or os.getenv("LLM_API_TYPE", "openai")
+        
+        self.llm_processor = LLMProcessor(model_name=model_name, api_key=api_key, api_type=api_type)
+        
+        # Check if API is available
+        if not self.llm_processor.check_api_status():
+            logger.warning("LLM API is not available. Using fallback responses.")
         
         self.log_file = 'enhanced_chat_logs.jsonl'
         self.logs = []

@@ -2,7 +2,7 @@
 LLM Processor Module
 
 This module provides functionality for generating natural language responses
-using Ollama with Mistral 7B or Llama 2 models.
+using external LLM APIs like OpenAI (ChatGPT) or similar services.
 """
 
 import os
@@ -10,6 +10,11 @@ import json
 import requests
 from typing import List, Dict, Any, Optional
 import logging
+import openai
+from dotenv import load_dotenv
+
+# Load environment variables from .env file if it exists
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -17,30 +22,63 @@ logger = logging.getLogger(__name__)
 
 class LLMProcessor:
     """
-    Processes natural language using Ollama with local LLM models.
+    Processes natural language using external LLM APIs.
     Generates contextual and empathetic responses for the chatbot.
     """
     
-    def __init__(self, model_name: str = None, ollama_host: str = None, ollama_port: str = None):
+    def __init__(self, model_name: str = None, api_key: str = None, api_type: str = None):
         """
         Initialize the LLM processor.
         
         Args:
-            model_name: The name of the Ollama model to use
-            ollama_host: The hostname of the Ollama service
-            ollama_port: The port of the Ollama service
+            model_name: The name of the LLM model to use
+            api_key: The API key for the LLM service
+            api_type: The type of API to use (openai, azure, etc.)
         """
         # Use environment variables if parameters are not provided
-        self.model_name = model_name or os.getenv("OLLAMA_MODEL", "mistral:7b-instruct")
-        host = ollama_host or os.getenv("OLLAMA_HOST", "localhost")
-        port = ollama_port or os.getenv("OLLAMA_PORT", "11434")
+        self.api_type = api_type or os.getenv("LLM_API_TYPE", "openai")
+        self.model_name = model_name or os.getenv("LLM_MODEL", "gpt-3.5-turbo")
+        self.api_key = api_key or os.getenv("LLM_API_KEY", "")
+        self.api_base = os.getenv("LLM_API_BASE", "")
         
-        self.ollama_url = f"http://{host}:{port}"
-        logger.info(f"Initialized LLM Processor with model: {self.model_name} at {self.ollama_url}")
+        # Set up the API client
+        self._setup_api_client()
         
-        # Verify connection to Ollama at initialization
-        self._verify_ollama_connection()
+        logger.info(f"Initialized LLM Processor with model: {self.model_name} using {self.api_type} API")
         
+    def _setup_api_client(self):
+        """
+        Set up the API client based on the API type.
+        """
+        if not self.api_key:
+            logger.warning("No API key provided. LLM API calls will fail.")
+            return
+            
+        if self.api_type.lower() == "openai":
+            # Set up OpenAI client
+            openai.api_key = self.api_key
+            if self.api_base:
+                openai.api_base = self.api_base
+            logger.info("OpenAI API client configured")
+        elif self.api_type.lower() == "azure":
+            # Set up Azure OpenAI client
+            openai.api_type = "azure"
+            openai.api_key = self.api_key
+            openai.api_base = self.api_base or "https://your-resource-name.openai.azure.com"
+            openai.api_version = os.getenv("AZURE_API_VERSION", "2023-05-15")
+            logger.info("Azure OpenAI API client configured")
+        elif self.api_type.lower() == "together":
+            # Set up Together.ai client using OpenAI's client
+            openai.api_key = self.api_key
+            openai.api_base = self.api_base or "https://api.together.xyz/v1"
+            logger.info("Together.ai API client configured")
+        else:
+            # Default to OpenAI-compatible API
+            openai.api_key = self.api_key
+            if self.api_base:
+                openai.api_base = self.api_base
+            logger.info(f"Using OpenAI-compatible API for {self.api_type}")
+            
     def generate_response(self, conversation_history: List[Dict[str, str]], 
                          user_info: Optional[Dict[str, Any]] = None,
                          is_bullying: bool = False,
@@ -54,6 +92,7 @@ class LLMProcessor:
             user_info: Optional information about the user
             is_bullying: Whether the current message is detected as bullying
             bullying_type: The type of bullying detected (if any)
+            current_message: The current message from the user
             
         Returns:
             Generated response text
@@ -81,31 +120,67 @@ class LLMProcessor:
                 "content": message.get("content", "")
             })
             
-        # Call Ollama API
         try:
-            logger.info(f"Calling Ollama API with {len(messages)} messages")
-            # Log the URL being called for debugging
-            logger.info(f"Calling Ollama API at URL: {self.ollama_url}/api/chat")
+            if not self.api_key:
+                logger.error("No API key provided. Using fallback response.")
+                return self._get_fallback_response(is_bullying, bullying_type, current_message)
+                
+            logger.info(f"Calling {self.api_type} API with {len(messages)} messages")
             
-            # Increase timeout to 60 seconds
-            response = requests.post(
-                f"{self.ollama_url}/api/chat",
-                json={
-                    "model": self.model_name,
-                    "messages": messages,
-                    "stream": False,
-                    "temperature": 0.7,
-                    "top_p": 0.9,
-                    "max_tokens": 500
-                },
-                timeout=60  # Increased timeout
-            )
-            response.raise_for_status()
-            result = response.json()
-            logger.info(f"Received response from Ollama API")
-            return result["message"]["content"]
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error calling Ollama API: {e}")
+            if self.api_type.lower() == "azure":
+                # Call Azure OpenAI API
+                response = openai.ChatCompletion.create(
+                    deployment_id=self.model_name,  # Azure uses deployment_id instead of model
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=500,
+                    top_p=0.9,
+                    frequency_penalty=0,
+                    presence_penalty=0
+                )
+                logger.info(f"Received response from Azure OpenAI API")
+                return response.choices[0].message.content
+            else:
+                # Call OpenAI API or compatible API (Together.ai, etc.)
+                try:
+                    response = openai.ChatCompletion.create(
+                        model=self.model_name,
+                        messages=messages,
+                        temperature=0.7,
+                        max_tokens=500,
+                        top_p=0.9,
+                        frequency_penalty=0,
+                        presence_penalty=0
+                    )
+                    logger.info(f"Received response from {self.api_type} API")
+                    return response.choices[0].message.content
+                except Exception as e:
+                    # If there's an error with the model name, try with a different format
+                    # Some APIs require different model name formats
+                    if "model" in str(e).lower():
+                        logger.warning(f"Error with model name format, trying alternative format: {e}")
+                        try:
+                            # Try with just the model name without path
+                            model_name_simple = self.model_name.split('/')[-1] if '/' in self.model_name else self.model_name
+                            response = openai.ChatCompletion.create(
+                                model=model_name_simple,
+                                messages=messages,
+                                temperature=0.7,
+                                max_tokens=500,
+                                top_p=0.9,
+                                frequency_penalty=0,
+                                presence_penalty=0
+                            )
+                            logger.info(f"Received response from {self.api_type} API using alternative model format")
+                            return response.choices[0].message.content
+                        except Exception as e2:
+                            logger.error(f"Error with alternative model format: {e2}")
+                            raise e2
+                    else:
+                        raise e
+                
+        except Exception as e:
+            logger.error(f"Error calling {self.api_type} API: {e}")
             return self._get_fallback_response(is_bullying, bullying_type, current_message)
     
     def _create_system_prompt(self, is_bullying: bool, bullying_type: str, user_info: Optional[Dict[str, Any]], current_message: str = None) -> str:
@@ -261,50 +336,56 @@ class LLMProcessor:
             "Estoy aquí para escucharte."
         )
     
-    def _verify_ollama_connection(self) -> None:
+    def check_api_status(self) -> bool:
         """
-        Verify the connection to Ollama at initialization and log the result.
-        """
-        try:
-            response = requests.get(f"{self.ollama_url}/api/tags", timeout=10)
-            response.raise_for_status()
-            models = response.json().get("models", [])
-            
-            if models:
-                model_names = [model.get("name", "") for model in models]
-                logger.info(f"Successfully connected to Ollama. Available models: {model_names}")
-                
-                # Check if our model is in the list
-                model_prefix = self.model_name.split(":")[0]
-                if any(model.startswith(model_prefix) for model in model_names):
-                    logger.info(f"Model {self.model_name} is available in Ollama")
-                else:
-                    logger.warning(f"Model {self.model_name} not found in Ollama. Available models: {model_names}")
-            else:
-                logger.warning("Connected to Ollama but no models are available")
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error connecting to Ollama at {self.ollama_url}: {e}")
-            logger.info("Will attempt to use fallback responses when generating responses")
-    
-    def check_ollama_status(self) -> bool:
-        """
-        Check if Ollama is running and the model is available.
+        Check if the API is available and configured correctly.
         
         Returns:
-            True if Ollama is running and the model is available, False otherwise
+            True if the API is available, False otherwise
         """
-        try:
-            response = requests.get(f"{self.ollama_url}/api/tags", timeout=5)
-            response.raise_for_status()
-            models = response.json().get("models", [])
-            
-            # Check if our model is in the list
-            for model in models:
-                if model.get("name", "").startswith(self.model_name.split(":")[0]):
-                    return True
-            
-            logger.warning(f"Model {self.model_name} not found in Ollama")
+        if not self.api_key:
+            logger.warning("No API key provided. API calls will fail.")
             return False
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error checking Ollama status: {e}")
+            
+        try:
+            if self.api_type.lower() == "azure":
+                # Simple test request to Azure OpenAI
+                response = openai.ChatCompletion.create(
+                    deployment_id=self.model_name,
+                    messages=[{"role": "system", "content": "Hello"}],
+                    max_tokens=5
+                )
+                return True
+            else:
+                # Test request to OpenAI or compatible API (Together.ai, etc.)
+                try:
+                    response = openai.ChatCompletion.create(
+                        model=self.model_name,
+                        messages=[{"role": "system", "content": "Hello"}],
+                        max_tokens=5
+                    )
+                    logger.info(f"Successfully connected to {self.api_type} API")
+                    return True
+                except Exception as e:
+                    # If there's an error with the model name, try with a different format
+                    if "model" in str(e).lower():
+                        logger.warning(f"Error with model name format, trying alternative format: {e}")
+                        try:
+                            # Try with just the model name without path
+                            model_name_simple = self.model_name.split('/')[-1] if '/' in self.model_name else self.model_name
+                            response = openai.ChatCompletion.create(
+                                model=model_name_simple,
+                                messages=[{"role": "system", "content": "Hello"}],
+                                max_tokens=5
+                            )
+                            logger.info(f"Successfully connected to {self.api_type} API using alternative model format")
+                            return True
+                        except Exception as e2:
+                            logger.error(f"Error with alternative model format: {e2}")
+                            return False
+                    else:
+                        logger.error(f"Error connecting to {self.api_type} API: {e}")
+                        return False
+        except Exception as e:
+            logger.error(f"Error checking {self.api_type} API status: {e}")
             return False

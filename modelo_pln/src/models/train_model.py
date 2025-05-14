@@ -452,12 +452,22 @@ def main(force_training=False):
     try:
         # Verificar si el modelo ya existe
         model_path = os.environ.get('MODEL_PATH', 'models/model_8001')
-        model_exists = os.path.exists(model_path)
+        model_file = os.path.join(os.path.dirname(model_path), 'bullying_detection_model.joblib')
+        features_file = os.path.join(os.path.dirname(model_path), 'text_features.joblib')
+        
+        # Verificar si los archivos del modelo existen
+        model_exists = os.path.exists(model_file) and os.path.exists(features_file)
+        
+        print(f"\nVerificando modelo en: {model_file}")
+        print(f"Modelo existe: {model_exists}")
+        print(f"Forzar entrenamiento: {force_training}")
         
         if model_exists and not force_training:
             print("\n=== Modelo existente detectado ===")
-            print(f"Usando modelo existente en: {model_path}")
+            print(f"Usando modelo existente en: {model_file}")
             print("Para reentrenar el modelo, establece FORCE_TRAINING=true")
+            # Crear directorio si no existe
+            os.makedirs(os.path.dirname(model_path), exist_ok=True)
             return 0
             
         print("\n=== Iniciando proceso de entrenamiento ===")

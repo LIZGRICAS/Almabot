@@ -1,5 +1,7 @@
 services:
   db:
+    networks:
+      - almabot-network
     image: mysql:8.0
     container_name: almabot-db
     environment:
@@ -9,7 +11,7 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD:-almabot123}
       MYSQL_ROOT_HOST: '%'
     ports:
-      - "${DB_PORT:-3306}:3306"
+      - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./src/database/schema.sql:/docker-entrypoint-initdb.d/init.sql
@@ -28,45 +30,11 @@ services:
         reservations:
           memory: 512M
 
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
-    container_name: almabot-api
-    depends_on:
-      db:
-        condition: service_healthy
-    ports:
-      - "${API_PORT:-8000}:8000"
-    environment:
-      - DB_HOST=db
-      - DB_USER=${DB_USER:-almabot}
-      - DB_PASSWORD=${DB_PASSWORD:-almabot123}
-      - DB_NAME=${DB_NAME:-almabot}
-      - DB_PORT=3306
-      - PYTHONUNBUFFERED=1
-      - PYTHONHASHSEED=42
-    volumes:
-      - ./src:/app/src
-      - ./data:/app/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-        reservations:
-          memory: 512M
+  # Los servicios de Ollama han sido reemplazados por una API externa
 
-
-  # Training service - runs once to train and save the model
   training:
+    networks:
+      - almabot-network
     build:
       context: .
       dockerfile: Dockerfile.train
@@ -77,6 +45,10 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-almabot123}
       - DB_NAME=${DB_NAME:-almabot}
       - PYTHONUNBUFFERED=1
+      - MODEL_PATH=/app/data/models/model
+      # Si FORCE_TRAINING es true, el modelo se reentrenará aunque ya exista
+      # Si es false (valor predeterminado), solo se entrenará si no existe
+      - FORCE_TRAINING=${FORCE_TRAINING:-false}
     volumes:
       - ./data/models:/app/data/models
       - ./data/raw:/app/data/raw
@@ -91,21 +63,72 @@ services:
           memory: 4G
         reservations:
           memory: 2G
-    restart: 'no'  # No restart after completion
-    command: >
-      bash -c "cd /app && python -c 'from src.models.train_model import main; main()' && 
-               echo 'Training completed successfully. The model has been saved.' && 
-               exit 0"
-    profiles:
-      - train
+    restart: 'on-failure'
+    command: |
+      bash -c 'mkdir -p /app/data/models && \
+      cd /app && \
+      python -c "from src.models.train_model import main; import os; force_training = os.environ.get(\"FORCE_TRAINING\", \"false\").lower() == \"true\"; print(\"FORCE_TRAINING =\", force_training); main(force_training)" && \
+      echo "Training completed successfully. The model has been saved or reused." && \
+      exit 0'
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
-    tmpfs:
-      - /tmp
-      - /var/tmp
+
+  api:
+    networks:
+      - almabot-network
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: almabot-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=${DB_NAME:-almabot}
+      - DB_USER=${DB_USER:-almabot}
+      - DB_PASSWORD=${DB_PASSWORD:-almabot123}
+      - MODEL_PATH=/app/data/models/model
+      - LLM_API_TYPE=${LLM_API_TYPE:-openai}
+      - LLM_MODEL=${LLM_MODEL:-gpt-3.5-turbo}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_API_BASE=${LLM_API_BASE:-}
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data/models:/app/data/models
+      - ./src:/app/src
+      - ./test_enhanced_chatbot.py:/app/test_enhanced_chatbot.py
+      - ./.env:/app/.env
+    depends_on:
+      db:
+        condition: service_healthy
+      training:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          memory: 1G
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-s", "-f", "http://localhost:8000/health" , "||" , "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+
 
 volumes:
   mysql_data:
@@ -113,5 +136,6 @@ volumes:
     driver: local
 
 networks:
-  default:
+  almabot-network:
+    name: almabot-network
     driver: bridge

@@ -1,5 +1,7 @@
 services:
   db_8001:
+    networks:
+      - almabot-network-8001
     image: mysql:8.0
     container_name: almabot-db-8001
     environment:
@@ -28,50 +30,11 @@ services:
         reservations:
           memory: 512M
           
-  ollama_8001:
-    image: ollama/ollama:latest
-    container_name: almabot-ollama-8001
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data_8001:/root/.ollama
-    restart: unless-stopped
-    environment:
-      - OLLAMA_HOST=0.0.0.0
-      - OLLAMA_MODELS=/root/.ollama/models
-    deploy:
-      resources:
-        limits:
-          cpus: '4'
-          memory: 8G
-        reservations:
-          memory: 4G
-    healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:11434/ || exit 0"]
-      interval: 15s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    # La imagen de Ollama ya ejecuta 'ollama serve' por defecto
-      
-  ollama_init_8001:
-    image: alpine:latest
-    container_name: almabot-ollama-init-8001
-    depends_on:
-      ollama_8001:
-        condition: service_healthy
-    volumes:
-      - ./init-ollama.sh:/init-ollama.sh:ro
-      - ./monitor_ollama.py:/monitor_ollama.py:ro
-    command: ["/bin/sh", "-c", "apk add --no-cache curl && sh /init-ollama.sh"]
-    restart: on-failure
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+  # Los servicios de Ollama han sido reemplazados por una API externa
 
   training_8001:
+    networks:
+      - almabot-network-8001
     build:
       context: .
       dockerfile: Dockerfile.train
@@ -112,6 +75,8 @@ services:
         max-file: "3"
 
   api_8001:
+    networks:
+      - almabot-network-8001
     build:
       context: .
       dockerfile: Dockerfile.api
@@ -125,21 +90,20 @@ services:
       - DB_USER=${DB_USER:-almabot}
       - DB_PASSWORD=${DB_PASSWORD:-almabot123}
       - MODEL_PATH=/app/data/models/model_8001
-      - OLLAMA_HOST=ollama_8001
-      - OLLAMA_PORT=11434
-      - OLLAMA_MODEL=mistral:7b-instruct
+      - LLM_API_TYPE=${LLM_API_TYPE:-openai}
+      - LLM_MODEL=${LLM_MODEL:-gpt-3.5-turbo}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_API_BASE=${LLM_API_BASE:-}
       - PYTHONUNBUFFERED=1
     volumes:
       - ./data/models:/app/data/models
       - ./src:/app/src
       - ./test_enhanced_chatbot.py:/app/test_enhanced_chatbot.py
-      - ./monitor_ollama.py:/app/monitor_ollama.py
+      - ./.env:/app/.env
     depends_on:
       db_8001:
         condition: service_healthy
       training_8001:
-        condition: service_completed_successfully
-      ollama_init_8001:
         condition: service_completed_successfully
     deploy:
       resources:
@@ -167,10 +131,8 @@ volumes:
   mysql_data_8001:
     name: almabot_mysql_data_8001
     driver: local
-  ollama_data_8001:
-    name: almabot_ollama_data_8001
-    driver: local
 
 networks:
   almabot-network-8001:
-    driver: bridge
+    name: almabot-network-8001
+    driver: brid

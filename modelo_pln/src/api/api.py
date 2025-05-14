@@ -31,13 +31,15 @@ app = FastAPI(
 
 # Configuración de CORS
 allowed_origins = [
-    "https://mc72r2h5-8000.use2.devtunnels.ms",  # VS Code tunnel URL
+    "https://mc72r2h5-8000.use2.devtunnels.ms",
     "http://localhost:8000",
     "http://localhost:8001",
     "http://localhost:3000",
-    "http://localhost:5173",  # Vite dev server
-    "https://almachatbot.vercel.app",  # Vite dev server
-    "https://translate.google.com"  # Google Translate for testing
+    "http://localhost:5173",
+    "https://almachatbot.vercel.app",
+    "http://almachatbot.vercel.app",
+    "https://translate.google.com",
+    "*"
 ]
 
 app.add_middleware(
@@ -47,12 +49,16 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
-    max_age=600  # Cache preflight requests for 10 minutes
+    max_age=600
 )
 
 # Inicializar el chatbot
-# Initialize the enhanced chatbot with the database connection and Mistral model
-chatbot = EnhancedChatbot(db_connection=db, model_name="mistral:7b-instruct")
+# Initialize the enhanced chatbot with the database connection and OpenAI model
+api_key = os.getenv('LLM_API_KEY', '')
+api_type = os.getenv('LLM_API_TYPE', 'openai')
+model_name = os.getenv('LLM_MODEL', 'gpt-3.5-turbo')
+
+chatbot = EnhancedChatbot(db_connection=db, model_name=model_name, api_key=api_key, api_type=api_type)
 
 
 # Modelos Pydantic
@@ -119,21 +125,19 @@ async def health_check():
     except Exception as e:
         db_status = f"error: {str(e)}"
     
-    # Verificar disponibilidad de Ollama si está configurado
-    ollama_status = "not_configured"
-    ollama_host = os.getenv('OLLAMA_HOST')
-    ollama_port = os.getenv('OLLAMA_PORT')
+    # Verificar disponibilidad de la API LLM si está configurada
+    llm_status = "not_configured"
+    llm_api_key = os.getenv('LLM_API_KEY')
+    llm_api_type = os.getenv('LLM_API_TYPE')
     
-    if ollama_host and ollama_port:
+    if llm_api_key:
         try:
-            import requests
-            response = requests.get(f"http://{ollama_host}:{ollama_port}/", timeout=2)
-            if response.status_code == 200:
-                ollama_status = "ok"
+            if chatbot.llm_processor.check_api_status():
+                llm_status = "ok"
             else:
-                ollama_status = f"error: status code {response.status_code}"
+                llm_status = "error: API check failed"
         except Exception as e:
-            ollama_status = f"error: {str(e)}"
+            llm_status = f"error: {str(e)}"
     
     # Verificar disponibilidad del modelo de detección de bullying
     model_status = "not_loaded"
@@ -147,7 +151,7 @@ async def health_check():
         "components": {
             "api": "ok",
             "database": db_status,
-            "ollama": ollama_status,
+            "llm_api": llm_status,
             "bullying_model": model_status
         }
     }
